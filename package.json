@@ -1,11 +1,15 @@
 {
-	"name": "n8n-nodes-community-template",
+	"name": "@blackswampai/n8n-nodes-twentycrm",
 	"version": "0.1.0",
-	"description": "Reusable starter package for verified n8n community nodes",
+	"description": "n8n community integration for Twenty CRM",
 	"license": "MIT",
-	"homepage": "https://github.com/christopherjnelson/n8n-community-node-template#readme",
+	"homepage": "https://github.com/BlackSwampAI/n8n-nodes-twentycrm#readme",
 	"keywords": [
-		"n8n-community-node-package"
+		"n8n-community-node-package",
+		"n8n",
+		"twenty",
+		"twenty-crm",
+		"crm"
 	],
 	"author": {
 		"name": "Christopher J. Nelson",
@@ -13,14 +17,23 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/christopherjnelson/n8n-community-node-template.git"
+		"url": "https://github.com/BlackSwampAI/n8n-nodes-twentycrm.git"
+	},
+	"bugs": {
+		"url": "https://github.com/BlackSwampAI/n8n-nodes-twentycrm/issues"
 	},
 	"scripts": {
-		"build": "n8n-node build",
+		"build": "node scripts/clean.mjs && n8n-node build",
 		"build:watch": "tsc --watch",
 		"dev": "n8n-node dev",
 		"lint": "n8n-node lint",
 		"lint:fix": "n8n-node lint --fix",
+		"format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",
+		"format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"package:check": "node scripts/package-check.mjs",
+		"smoke:load": "node scripts/node-load-smoke.mjs",
 		"release:check": "node scripts/release-check.mjs",
 		"release": "n8n-node release",
 		"prepublishOnly": "n8n-node prerelease"
@@ -31,13 +44,9 @@
 	"n8n": {
 		"n8nNodesApiVersion": 1,
 		"strict": true,
-		"credentials": [
-			"dist/credentials/GithubIssuesApi.credentials.js",
-			"dist/credentials/GithubIssuesOAuth2Api.credentials.js"
-		],
+		"credentials": [],
 		"nodes": [
-			"dist/nodes/GithubIssues/GithubIssues.node.js",
-			"dist/nodes/Example/Example.node.js"
+			"dist/Twenty.node.js"
 		]
 	},
 	"devDependencies": {
@@ -45,7 +54,8 @@
 		"eslint": "9.32.0",
 		"prettier": "3.6.2",
 		"release-it": "20.2.0",
-		"typescript": "5.9.2"
+		"typescript": "5.9.2",
+		"vitest": "4.1.11"
 	},
 	"peerDependencies": {
 		"n8n-workflow": "*"
