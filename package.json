@@ -40,6 +40,7 @@
 		"test:integration": "npm run build && node scripts/twenty-live-test.mjs",
 		"package:check": "node scripts/package-check.mjs",
 		"smoke:load": "node scripts/node-load-smoke.mjs",
+		"test:load": "npm run smoke:load",
 		"release:check": "node scripts/release-check.mjs",
 		"release": "n8n-node release",
 		"prepublishOnly": "n8n-node prerelease"

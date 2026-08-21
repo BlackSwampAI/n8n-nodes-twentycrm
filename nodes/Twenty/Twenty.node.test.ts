@@ -4,9 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { Twenty } from './Twenty.node';
 import type { NormalizedObjectDefinition } from './shared/contracts';
 import { createObjectMetadataService } from './shared/metadata';
+import { createRecordReadService } from './shared/records';
 
 vi.mock('./shared/metadata', () => ({ createObjectMetadataService: vi.fn() }));
+vi.mock('./shared/records', () => ({ createRecordReadService: vi.fn() }));
 const serviceMock = vi.mocked(createObjectMetadataService);
+const recordServiceMock = vi.mocked(createRecordReadService);
 
 function schemaObject(
 	overrides: Partial<NormalizedObjectDefinition> = {},
@@ -43,20 +46,52 @@ function executeContext(
 }
 
 describe('Twenty CRM Schema Object node', () => {
-	it('exposes only Schema Object Get/Get Many and a stable resource locator', () => {
+	it('exposes Schema Object and Record Get/Get Many with stable resource locators', () => {
 		const node = new Twenty();
 		expect(node.description.displayName).toBe('Twenty CRM');
 		expect(node.description.usableAsTool).toBe(true);
-		const operation = node.description.properties.find(({ name }) => name === 'operation');
-		expect(operation?.options).toEqual(
+		const resource = node.description.properties.find(({ name }) => name === 'resource');
+		expect(resource?.options).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ value: 'get' }),
-				expect.objectContaining({ value: 'getMany' }),
+				expect.objectContaining({ value: 'record' }),
+				expect.objectContaining({ value: 'schemaObject' }),
 			]),
 		);
-		expect(node.description.properties.find(({ name }) => name === 'objectApiName')).toMatchObject({
+		const operations = node.description.properties.filter(({ name }) => name === 'operation');
+		expect(operations).toHaveLength(2);
+		for (const resourceName of ['record', 'schemaObject']) {
+			const operation = operations.find(
+				(property) => property.displayOptions?.show?.resource?.[0] === resourceName,
+			);
+			expect(operation?.options).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ value: 'get' }),
+					expect.objectContaining({ value: 'getMany' }),
+				]),
+			);
+		}
+		const locators = node.description.properties.filter(({ name }) => name === 'objectApiName');
+		const recordLocator = locators.find(
+			(property) => property.displayOptions?.show?.resource?.[0] === 'record',
+		);
+		expect(recordLocator).toMatchObject({
 			type: 'resourceLocator',
+			displayOptions: { show: { resource: ['record'] } },
+			modes: expect.arrayContaining([
+				expect.objectContaining({
+					name: 'list',
+					typeOptions: { searchListMethod: 'searchSchemaObjects', searchable: true },
+				}),
+				expect.objectContaining({ name: 'apiName', type: 'string' }),
+			]),
 		});
+		expect(locators).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					displayOptions: { show: { resource: ['schemaObject'], operation: ['get'] } },
+				}),
+			]),
+		);
 	});
 
 	it('filters and deterministically sorts active non-system selector entries', async () => {
@@ -71,6 +106,7 @@ describe('Twenty CRM Schema Object node', () => {
 					schemaObject({ apiNameSingular: 'alphaAlpha', labelSingular: 'Same' }),
 					schemaObject({ apiNameSingular: 'inactive', labelSingular: 'Inactive', isActive: false }),
 					schemaObject({ apiNameSingular: 'system', labelSingular: 'System', isSystem: true }),
+					schemaObject({ apiNameSingular: 'remote', labelSingular: 'Remote', isRemote: true }),
 				]),
 		});
 		const result = await new Twenty().methods.listSearch.searchSchemaObjects.call(
@@ -100,8 +136,8 @@ describe('Twenty CRM Schema Object node', () => {
 	});
 
 	it.each([
-		[{ resource: 'record', operation: 'getMany' }, 'Unsupported Twenty CRM resource'],
-		[{ resource: 'schemaObject', operation: 'delete' }, 'Unsupported Schema Object operation'],
+		[{ resource: 'unknown', operation: 'getMany' }, 'Unsupported Twenty CRM resource'],
+		[{ resource: 'schemaObject', operation: 'delete' }, 'Unsupported Twenty CRM operation'],
 	] as const)(
 		'rejects stale dispatch values before metadata is requested',
 		async (parameters, message) => {
@@ -129,6 +165,35 @@ describe('Twenty CRM Schema Object node', () => {
 		);
 		expect(getObject).toHaveBeenCalledWith('vehicle');
 		expect(getObject).toHaveBeenCalledWith('widget');
+		expect(result[0].map((item) => item.pairedItem)).toEqual([0, 1]);
+	});
+
+	it('executes Record Get/Get Many per input and preserves paired-item provenance', async () => {
+		serviceMock.mockReturnValue({ getObject: vi.fn(), getObjects: vi.fn() });
+		const get = vi.fn().mockResolvedValue({ id: 'synthetic-get' });
+		const getMany = vi.fn().mockResolvedValue([{ id: 'synthetic-list' }]);
+		recordServiceMock.mockReturnValue({ get, getMany });
+		const result = await Twenty.prototype.execute.call(
+			executeContext([
+				{ resource: 'record', operation: 'get', objectApiName: 'vehicle', recordId: 'record-id' },
+				{
+					resource: 'record',
+					operation: 'getMany',
+					objectApiName: 'widget',
+					returnAll: false,
+					limit: 25,
+					filter: 'status[eq]:"open"',
+					orderBy: 'createdAt[DescNullsLast]',
+				},
+			]),
+		);
+		expect(get).toHaveBeenCalledWith('vehicle', 'record-id');
+		expect(getMany).toHaveBeenCalledWith('widget', {
+			returnAll: false,
+			limit: 25,
+			filter: 'status[eq]:"open"',
+			orderBy: 'createdAt[DescNullsLast]',
+		});
 		expect(result[0].map((item) => item.pairedItem)).toEqual([0, 1]);
 	});
 
