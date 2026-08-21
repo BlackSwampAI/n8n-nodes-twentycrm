@@ -12,6 +12,8 @@ The package is not yet available from npm. After a future release, the intended 
 
 For development, use Node.js 22.22.0 or newer, clone the repository, and run `npm ci` followed by `npm run build`.
 
+An opt-in disposable Twenty v2.9.0 environment is available for authenticated local qualification. See [Local Twenty integration harness](docs/LOCAL_TWENTY.md).
+
 ## Compatibility
 
 No Twenty Cloud, self-hosted Twenty, or n8n runtime version has been qualified yet. The package declares Node.js `>=22.22.0` and treats `n8n-workflow` as a host-provided peer dependency.
