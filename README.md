@@ -22,11 +22,11 @@ The planned qualification strategy covers Twenty Cloud and a pinned self-hosted 
 
 The `Twenty API` credential requires an API key and sends it as a Bearer authorization value when later operations make requests. Its configurable Base URL defaults to `https://api.twenty.com`; self-hosted users should enter the root URL of their Twenty installation, including any reverse-proxy path prefix. Pasted `/rest`, `/graphql`, `/metadata`, or `/rest/metadata` endpoint suffixes are normalized centrally.
 
-The credential does not make a connectivity request yet. Never include API keys in workflows, source code, or issue reports.
+Testing the credential sends a read-only Core GraphQL `__typename` query to validate the normalized API route and Bearer authentication without reading CRM records. Never include API keys in workflows, source code, or issue reports.
 
 ## Operations
 
-No operations are available yet. The current `Twenty CRM` node is a non-networking shell that fails with a clear development-stage message if executed. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
+No operations are available yet. The current `Twenty CRM` node remains a non-networking shell that fails with a clear development-stage message if executed. Future operations will use one shared authenticated request path; no retry behavior is implemented yet. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
 
 ## Resources
 

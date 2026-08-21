@@ -1,4 +1,3 @@
-/* eslint-disable @n8n/community-nodes/credential-test-required -- Connectivity testing is intentionally deferred to the authenticated transport milestone. */
 import type { IAuthenticateGeneric, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class TwentyApi implements ICredentialType {
