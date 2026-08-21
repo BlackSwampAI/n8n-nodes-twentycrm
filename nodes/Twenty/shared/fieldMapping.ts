@@ -177,7 +177,7 @@ export function reconstructRecordPayload(
 			allowed.set(field.apiName, { parent: field.apiName });
 		}
 	}
-	const payload = Object.create(null) as IDataObject;
+	const payload: IDataObject = {};
 	for (const [key, value] of Object.entries(values)) {
 		if (value === undefined) continue;
 		const target = allowed.get(key);
@@ -194,7 +194,7 @@ export function reconstructRecordPayload(
 			payload[target.parent] = value as IDataObject[string];
 			continue;
 		}
-		const compound = (payload[target.parent] ??= Object.create(null) as IDataObject) as IDataObject;
+		const compound = (payload[target.parent] ??= {}) as IDataObject;
 		compound[target.part] = value as IDataObject[string];
 	}
 	return payload;

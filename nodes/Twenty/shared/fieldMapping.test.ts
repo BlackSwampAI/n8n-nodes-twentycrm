@@ -1,4 +1,5 @@
 import type { NormalizedFieldDefinition, NormalizedObjectDefinition } from './contracts';
+import { isObjectEmpty } from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 import {
 	buildRecordMapperFields,
@@ -176,6 +177,12 @@ describe('Twenty record field mapping', () => {
 			links: { secondaryLinks: [{ url: 'synthetic', label: 'Synthetic' }] },
 			richText: { markdown: '' },
 		});
+		expect(Object.getPrototypeOf(payload)).toBe(Object.prototype);
+		expect(Object.getPrototypeOf(payload.name)).toBe(Object.prototype);
+		expect(() => isObjectEmpty(payload)).not.toThrow();
+		expect(() => isObjectEmpty(payload.name as object)).not.toThrow();
+		expect(isObjectEmpty(payload)).toBe(false);
+		expect(isObjectEmpty(payload.name as object)).toBe(false);
 		expect(reconstructRecordPayload(metadata, mapper({}))).toEqual({});
 		expect(reconstructRecordPayload(metadata, mapper({ name__firstName: undefined }))).toEqual({});
 	});
