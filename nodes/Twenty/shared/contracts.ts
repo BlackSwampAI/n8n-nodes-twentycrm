@@ -1,23 +1,57 @@
 export type TwentyApiSurface = 'coreRest' | 'coreGraphql' | 'metadataRest' | 'metadataGraphql';
 
 export interface NormalizedObjectDefinition {
+	id: string;
+	universalIdentifier?: string;
 	apiNameSingular: string;
 	apiNamePlural: string;
 	labelSingular: string;
 	labelPlural: string;
+	description?: string;
+	icon?: string;
 	isActive: boolean;
 	isCustom: boolean;
+	isRemote: boolean;
+	isSystem: boolean;
+	isReadOnly: boolean;
+	isSearchable: boolean;
 	fields: NormalizedFieldDefinition[];
 }
 
 export interface NormalizedFieldDefinition {
+	id: string;
+	universalIdentifier?: string;
 	apiName: string;
 	label: string;
 	type: string;
+	description?: string;
+	icon?: string;
+	isActive: boolean;
+	isCustom: boolean;
+	isNullable: boolean;
+	isUnique: boolean;
 	isRequired: boolean;
 	isReadOnly: boolean;
 	isSystem: boolean;
 	defaultValue?: unknown;
+	options?: unknown;
+	settings?: unknown;
+	relation?: NormalizedRelationDefinition;
+	morphRelations?: NormalizedRelationDefinition[];
+}
+
+export interface NormalizedRelationEndpoint {
+	objectId: string;
+	objectApiNameSingular: string;
+	objectApiNamePlural: string;
+	fieldId: string;
+	fieldApiName: string;
+}
+
+export interface NormalizedRelationDefinition {
+	type: string;
+	source: NormalizedRelationEndpoint;
+	target: NormalizedRelationEndpoint;
 }
 
 export type TwentyRecord = Readonly<Record<string, unknown>>;

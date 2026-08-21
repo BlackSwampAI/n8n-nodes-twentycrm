@@ -61,6 +61,9 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain("'Metadata GraphQL'");
 		expect(liveTest).toContain('urls.metadataGraphql');
 		expect(liveTest).toContain('query HarnessMetadataProbe');
+		expect(liveTest).toContain('OBJECT_METADATA_QUERY');
+		expect(liveTest).toContain('normalizeTwentyObject');
+		expect(liveTest).toContain('object.fields.length > 0');
 		expect(liveTest).not.toMatch(/\bmutation\b/);
 		expect(liveTest).toContain('AbortSignal.timeout(PROBE_TIMEOUT_MS)');
 		expect(liveTest).toContain('const PROBE_TIMEOUT_MS = 15_000');
