@@ -11,6 +11,7 @@ describe('Twenty CRM foundation node', () => {
 		expect(node.description.name).toBe('twenty');
 		expect(node.description.credentials).toBeUndefined();
 		expect(node.description.requestDefaults).toBeUndefined();
+		expect(node.description.usableAsTool).toBeUndefined();
 		expect(node.description.properties).toHaveLength(1);
 	});
 

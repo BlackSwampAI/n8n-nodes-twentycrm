@@ -8,31 +8,32 @@ const output = execFileSync('npm', ['pack', '--dry-run', '--json'], {
 });
 const [pack] = JSON.parse(output);
 const files = pack.files.map(({ path }) => path).sort();
-const allowedRootFiles = new Set(['CHANGELOG.md', 'LICENSE.md', 'README.md', 'package.json']);
-const unexpected = files.filter(
-	(path) =>
-		(!path.startsWith('dist/') && !allowedRootFiles.has(path)) ||
-		path.includes('.test.') ||
-		path.includes('.spec.'),
-);
+const expectedFiles = [
+	'LICENSE.md',
+	'README.md',
+	'package.json',
+	'dist/Twenty.node.d.ts',
+	'dist/Twenty.node.js',
+	'dist/Twenty.node.js.map',
+	'dist/Twenty.node.json',
+	'dist/nodes/Twenty/twenty.dark.svg',
+	'dist/nodes/Twenty/twenty.svg',
+	'dist/shared/contracts.d.ts',
+	'dist/shared/contracts.js',
+	'dist/shared/contracts.js.map',
+].sort();
+const missing = expectedFiles.filter((path) => !files.includes(path));
+const unexpected = files.filter((path) => !expectedFiles.includes(path));
 
-if (unexpected.length > 0) {
-	console.error(
-		`Unexpected files in npm package:\n${unexpected.map((path) => `- ${path}`).join('\n')}`,
-	);
+if (missing.length > 0 || unexpected.length > 0) {
+	console.error('npm package contents do not match the expected foundation artifact set.');
+	if (missing.length > 0) {
+		console.error(`Missing files:\n${missing.map((path) => `- ${path}`).join('\n')}`);
+	}
+	if (unexpected.length > 0) {
+		console.error(`Unexpected files:\n${unexpected.map((path) => `- ${path}`).join('\n')}`);
+	}
 	process.exit(1);
 }
 
-for (const required of [
-	'dist/Twenty.node.js',
-	'dist/Twenty.node.json',
-	'dist/nodes/Twenty/twenty.svg',
-	'dist/nodes/Twenty/twenty.dark.svg',
-]) {
-	if (!files.includes(required)) {
-		console.error(`Required package file is missing: ${required}`);
-		process.exit(1);
-	}
-}
-
-console.log(`Package allowlist passed (${files.length} files)`);
+console.log(`Exact package artifact set passed (${files.length} files)`);

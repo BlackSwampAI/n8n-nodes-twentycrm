@@ -1,3 +1,4 @@
+/* eslint-disable @n8n/community-nodes/node-usable-as-tool -- The foundation shell has no usable operations. */
 import type {
 	IExecuteFunctions,
 	INodeExecutionData,
@@ -23,7 +24,6 @@ export class Twenty implements INodeType {
 		},
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
-		usableAsTool: true,
 		properties: [
 			{
 				displayName: FOUNDATION_MESSAGE,

@@ -34,6 +34,7 @@ export interface FieldMetadataService {
 export interface RecordService {
 	create(objectApiName: string, input: TwentyRecord): Promise<TwentyRecord>;
 	get(objectApiName: string, recordId: string): Promise<TwentyRecord>;
+	getMany(objectApiName: string): Promise<TwentyRecord[]>;
 	update(objectApiName: string, recordId: string, input: TwentyRecord): Promise<TwentyRecord>;
 	delete(objectApiName: string, recordId: string): Promise<void>;
 }
