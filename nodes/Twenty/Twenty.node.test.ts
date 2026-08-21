@@ -9,7 +9,14 @@ describe('Twenty CRM foundation node', () => {
 
 		expect(node.description.displayName).toBe('Twenty CRM');
 		expect(node.description.name).toBe('twenty');
-		expect(node.description.credentials).toEqual([{ name: 'twentyApi', required: true }]);
+		expect(node.description.credentials).toEqual([
+			{
+				name: 'twentyApi',
+				required: true,
+				testedBy: 'twentyApiCredentialTest',
+			},
+		]);
+		expect(node.methods.credentialTest.twentyApiCredentialTest).toBeTypeOf('function');
 		expect(node.description.requestDefaults).toBeUndefined();
 		expect(node.description.usableAsTool).toBeUndefined();
 		expect(node.description.properties).toHaveLength(1);
