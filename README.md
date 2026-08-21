@@ -20,7 +20,9 @@ The planned qualification strategy covers Twenty Cloud and a pinned self-hosted 
 
 ## Credentials
 
-Credentials are not included in this foundation milestone. A later milestone will add bearer API-key authentication, a configurable root URL, and a connectivity test for Twenty Cloud and self-hosted installations.
+The `Twenty API` credential requires an API key and sends it as a Bearer authorization value when later operations make requests. Its configurable Base URL defaults to `https://api.twenty.com`; self-hosted users should enter the root URL of their Twenty installation, including any reverse-proxy path prefix. Pasted `/rest`, `/graphql`, `/metadata`, or `/rest/metadata` endpoint suffixes are normalized centrally.
+
+The credential does not make a connectivity request yet. Never include API keys in workflows, source code, or issue reports.
 
 ## Operations
 

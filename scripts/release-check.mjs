@@ -57,11 +57,17 @@ if (packageJson.peerDependencies?.['n8n-workflow'] !== '*') {
 	fail('n8n-workflow must remain a host-provided peer dependency');
 }
 if (packageJson.n8n?.strict !== true) fail('package.json n8n.strict must be true');
-if (JSON.stringify(packageJson.n8n?.nodes) !== JSON.stringify(['dist/Twenty.node.js'])) {
+if (
+	JSON.stringify(packageJson.n8n?.nodes) !== JSON.stringify(['dist/nodes/Twenty/Twenty.node.js'])
+) {
 	fail('package.json must register only the compiled Twenty CRM node');
 }
-if (packageJson.n8n?.credentials?.length)
-	fail('credentials are not part of the foundation milestone');
+if (
+	JSON.stringify(packageJson.n8n?.credentials) !==
+	JSON.stringify(['dist/credentials/TwentyApi.credentials.js'])
+) {
+	fail('package.json must register only the compiled Twenty API credential');
+}
 if (packageJson.publishConfig?.access !== 'public') fail('publishConfig.access must be public');
 if (packageJson.engines?.node !== '>=22.22.0')
 	fail('engines.node must match the current >=22.22.0 baseline');
