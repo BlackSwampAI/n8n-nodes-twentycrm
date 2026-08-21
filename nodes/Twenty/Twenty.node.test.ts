@@ -37,10 +37,10 @@ function executeContext(
 ) {
 	return {
 		getInputData: () => items,
-		getNodeParameter: (name: string, index: number) =>
-			name === 'resource' && parameters[index][name] === undefined
-				? 'schemaObject'
-				: parameters[index][name],
+		getNodeParameter: (name: string, index: number, defaultValue?: unknown) => {
+			if (name === 'resource' && parameters[index][name] === undefined) return 'schemaObject';
+			return parameters[index][name] === undefined ? defaultValue : parameters[index][name];
+		},
 		getNode: () => ({ name: 'Twenty CRM', type: 'twenty', typeVersion: 1, position: [0, 0] }),
 	} as unknown as IExecuteFunctions;
 }
@@ -110,7 +110,33 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(jsonInput).toMatchObject({
 			type: 'json',
 			required: true,
-			displayOptions: { show: { resource: ['record'], operation: ['create', 'update'] } },
+			displayOptions: {
+				show: { resource: ['record'], operation: ['create', 'update'], inputMode: ['json'] },
+			},
+		});
+		const inputMode = node.description.properties.find(({ name }) => name === 'inputMode');
+		expect(inputMode).toMatchObject({ type: 'options', default: 'fieldMapping' });
+		const createFields = node.description.properties.find(({ name }) => name === 'createFields');
+		expect(createFields).toMatchObject({
+			type: 'resourceMapper',
+			typeOptions: {
+				resourceMapper: {
+					mode: 'add',
+					resourceMapperMethod: 'getCreateFields',
+					supportAutoMap: false,
+				},
+			},
+		});
+		const updateFields = node.description.properties.find(({ name }) => name === 'updateFields');
+		expect(updateFields).toMatchObject({
+			type: 'resourceMapper',
+			typeOptions: {
+				resourceMapper: {
+					mode: 'update',
+					resourceMapperMethod: 'getUpdateFields',
+					supportAutoMap: false,
+				},
+			},
 		});
 	});
 
@@ -155,6 +181,50 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(emptyFilter.results).toHaveLength(4);
 	});
 
+	it('loads create and update mapper schemas from the selected stable object API name', async () => {
+		const getObject = vi.fn().mockResolvedValue(
+			schemaObject({
+				fields: [
+					{
+						id: 'field-name',
+						apiName: 'name',
+						label: 'Name',
+						type: 'TEXT',
+						isActive: true,
+						isCustom: true,
+						isNullable: false,
+						isUnique: false,
+						isRequired: true,
+						isReadOnly: false,
+						isSystem: false,
+						defaultValue: null,
+					},
+				],
+			}),
+		);
+		serviceMock.mockReturnValue({ getObject, getObjects: vi.fn() });
+		const getNodeParameter = vi.fn().mockReturnValue('vehicle');
+		const context = {
+			getNodeParameter,
+		} as unknown as ILoadOptionsFunctions;
+		const create = await new Twenty().methods.resourceMapping.getCreateFields.call(context);
+		const update = await new Twenty().methods.resourceMapping.getUpdateFields.call(context);
+		expect(getObject).toHaveBeenCalledWith('vehicle');
+		expect(getNodeParameter).toHaveBeenCalledWith('objectApiName', undefined, {
+			extractValue: true,
+		});
+		expect(create.fields[0]).toMatchObject({ id: 'name', required: true });
+		expect(update.fields[0]).toMatchObject({ id: 'name', required: false });
+		getObject.mockClear();
+		getNodeParameter.mockReturnValue('');
+		await expect(
+			new Twenty().methods.resourceMapping.getCreateFields.call(context),
+		).resolves.toEqual({
+			fields: [],
+		});
+		expect(getObject).not.toHaveBeenCalled();
+	});
+
 	it.each([
 		[{ resource: 'unknown', operation: 'getMany' }, 'Unsupported Twenty CRM resource'],
 		[{ resource: 'schemaObject', operation: 'delete' }, 'Unsupported Twenty CRM operation'],
@@ -188,7 +258,7 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(result[0].map((item) => item.pairedItem)).toEqual([0, 1]);
 	});
 
-	it('executes Record reads and writes per input with paired-item provenance', async () => {
+	it('executes Record reads and legacy JSON writes without inputMode with paired provenance', async () => {
 		serviceMock.mockReturnValue({ getObject: vi.fn(), getObjects: vi.fn() });
 		const get = vi.fn().mockResolvedValue({ id: 'synthetic-get' });
 		const getMany = vi.fn().mockResolvedValue([{ id: 'synthetic-list' }]);
@@ -210,7 +280,12 @@ describe('Twenty CRM Schema Object node', () => {
 					filter: 'status[eq]:"open"',
 					orderBy: 'createdAt[DescNullsLast]',
 				},
-				{ resource: 'record', operation: 'create', objectApiName: 'vehicle', jsonInput: '{}' },
+				{
+					resource: 'record',
+					operation: 'create',
+					objectApiName: 'vehicle',
+					jsonInput: '{}',
+				},
 				{
 					resource: 'record',
 					operation: 'update',
@@ -237,6 +312,72 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(update).toHaveBeenCalledWith('vehicle', 'update-id', { name: 'kept' });
 		expect(remove).toHaveBeenCalledWith('vehicle', 'delete-id');
 		expect(result[0].map((item) => item.pairedItem)).toEqual([0, 1, 2, 3, 4]);
+	});
+
+	it('reconstructs field-mapped Create and rejects stale mapped keys before mutation', async () => {
+		const metadataObject = schemaObject({
+			fields: [
+				{
+					id: 'field-name',
+					apiName: 'name',
+					label: 'Name',
+					type: 'FULL_NAME',
+					isActive: true,
+					isCustom: false,
+					isNullable: true,
+					isUnique: false,
+					isRequired: false,
+					isReadOnly: false,
+					isSystem: false,
+				},
+			],
+		});
+		serviceMock.mockReturnValue({
+			getObject: vi.fn().mockResolvedValue(metadataObject),
+			getObjects: vi.fn(),
+		});
+		const create = vi.fn().mockResolvedValue({ id: 'created' });
+		recordServiceMock.mockReturnValue({
+			create,
+			get: vi.fn(),
+			getMany: vi.fn(),
+			update: vi.fn(),
+			delete: vi.fn(),
+		});
+		const validMapper = {
+			mappingMode: 'defineBelow',
+			value: { name__firstName: 'Synthetic' },
+			matchingColumns: [],
+			schema: [],
+			attemptToConvertTypes: false,
+			convertFieldsToString: false,
+		};
+		await Twenty.prototype.execute.call(
+			executeContext([
+				{
+					resource: 'record',
+					operation: 'create',
+					objectApiName: 'vehicle',
+					inputMode: 'fieldMapping',
+					createFields: validMapper,
+				},
+			]),
+		);
+		expect(create).toHaveBeenCalledWith('vehicle', { name: { firstName: 'Synthetic' } });
+		await expect(
+			Twenty.prototype.execute.call(
+				executeContext([
+					{
+						resource: 'record',
+						operation: 'create',
+						objectApiName: 'vehicle',
+						inputMode: 'fieldMapping',
+						createFields: { ...validMapper, value: { stale: 'value' } },
+					},
+				]),
+			),
+		).rejects.toThrow('unknown or stale field');
+		expect(create).toHaveBeenCalledTimes(1);
 	});
 
 	it('filters Get Many defaults and honors include toggles', async () => {
