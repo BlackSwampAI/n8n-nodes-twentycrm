@@ -2,8 +2,9 @@ import type { NormalizedFieldDefinition, NormalizedObjectDefinition } from './co
 import { isObjectEmpty } from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 import {
-	buildRecordMapperFields,
 	buildFixedResourceMapperFields,
+	buildRecordMapperFields,
+	combineRecordMapperValues,
 	reconstructRecordPayload,
 	TwentyFieldMappingError,
 } from './fieldMapping';
@@ -73,8 +74,32 @@ describe('Twenty record field mapping', () => {
 			'address__addressPostcode',
 			'address__addressCountry',
 		]);
-		expect(fixed.slice(0, 8).every(({ removed }) => removed === false)).toBe(true);
-		expect(fixed.find(({ id }) => id === 'customValue')).toMatchObject({ removed: true });
+		expect(fixed).toHaveLength(8);
+		expect(fixed.every(({ removed, required }) => removed === false && required === false)).toBe(
+			true,
+		);
+		const additional = buildFixedResourceMapperFields(metadata, 'create', 'company', 'additional');
+		expect(additional.find(({ id }) => id === 'customValue')).toMatchObject({ removed: true });
+		expect(additional.some(({ id }) => fixed.some((common) => common.id === id))).toBe(false);
+		expect(
+			buildFixedResourceMapperFields(
+				object([
+					field({ apiName: 'optionalCustom', label: 'Optional Custom' }),
+					field({
+						apiName: 'requiredCustom',
+						label: 'Required Custom',
+						isNullable: false,
+						defaultValue: null,
+					}),
+				]),
+				'create',
+				'company',
+				'additional',
+			).map(({ id, required, removed }) => ({ id, required, removed })),
+		).toEqual([
+			{ id: 'optionalCustom', required: false, removed: true },
+			{ id: 'requiredCustom', required: true, removed: false },
+		]);
 		const generic = buildRecordMapperFields(metadata, 'create');
 		expect(generic.map(({ id }) => id)).toEqual([
 			'address__addressStreet1',
@@ -105,17 +130,19 @@ describe('Twenty record field mapping', () => {
 			field({ apiName: 'city', label: 'City' }),
 		]);
 		const fixed = buildFixedResourceMapperFields(metadata, 'update', 'person');
-		expect(fixed.slice(0, 7).map(({ id }) => id)).toEqual([
+		expect(fixed.map(({ id }) => id)).toEqual([
 			'name__firstName',
 			'name__lastName',
 			'emails__primaryEmail',
 			'phones__primaryPhoneNumber',
 			'jobTitle',
 			'city',
-			'customValue',
 		]);
-		expect(fixed.slice(0, 6).every(({ removed }) => removed === false)).toBe(true);
-		expect(fixed.find(({ id }) => id === 'customValue')).toMatchObject({
+		expect(fixed.every(({ removed, required }) => removed === false && required === false)).toBe(
+			true,
+		);
+		const additional = buildFixedResourceMapperFields(metadata, 'update', 'person', 'additional');
+		expect(additional.find(({ id }) => id === 'customValue')).toMatchObject({
 			removed: true,
 			required: false,
 		});
@@ -134,6 +161,25 @@ describe('Twenty record field mapping', () => {
 				expect.objectContaining({ id: 'emails__primaryEmail' }),
 				expect.objectContaining({ id: 'phones__primaryPhoneNumber' }),
 			]),
+		);
+	});
+
+	it('combines fixed mapper sections without losing compound parts and rejects unsafe overlap', () => {
+		const combined = combineRecordMapperValues(
+			mapper({ address__addressCity: 'City' }),
+			mapper({ address__addressStreet2: 'Street 2' }),
+		);
+		expect(
+			reconstructRecordPayload(
+				object([field({ apiName: 'address', label: 'Address', type: 'ADDRESS' })]),
+				combined,
+			),
+		).toEqual({ address: { addressCity: 'City', addressStreet2: 'Street 2' } });
+		expect(() =>
+			combineRecordMapperValues(mapper({ name: 'first' }), mapper({ name: 'duplicate' })),
+		).toThrow('duplicate field');
+		expect(() => combineRecordMapperValues(mapper({ name: 'safe' }), { value: [] })).toThrow(
+			'invalid or stale',
 		);
 	});
 	it('maps scalar, select, array, raw, relation, and future types deterministically', () => {

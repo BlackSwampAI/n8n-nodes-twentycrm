@@ -179,11 +179,13 @@ export function buildFixedResourceMapperFields(
 	object: NormalizedObjectDefinition,
 	mode: MapperMode,
 	resource: 'company' | 'person',
+	section: 'common' | 'additional' = 'common',
 ): ResourceMapperField[] {
 	const preferred = FIXED_PREFERRED_IDS[resource];
 	const rank = new Map(preferred.map((id, index) => [id, index]));
 	return buildRecordMapperFields(object, mode)
-		.map((field) => (rank.has(field.id) ? { ...field, removed: false } : field))
+		.filter((field) => (section === 'common' ? rank.has(field.id) : !rank.has(field.id)))
+		.map((field) => (section === 'common' ? { ...field, removed: false } : field))
 		.sort((left, right) => {
 			const leftRank = rank.get(left.id);
 			const rightRank = rank.get(right.id);
@@ -192,6 +194,36 @@ export function buildFixedResourceMapperFields(
 			}
 			return 0;
 		});
+}
+
+export function combineRecordMapperValues(
+	commonValue: ResourceMapperValue | unknown,
+	additionalValue: ResourceMapperValue | unknown,
+): ResourceMapperValue {
+	const combined: Record<string, unknown> = {};
+	for (const mapperValue of [commonValue, additionalValue]) {
+		if (!isRecord(mapperValue) || (mapperValue.value !== null && !isRecord(mapperValue.value))) {
+			throw new TwentyFieldMappingError('Twenty field mapping input is invalid or stale.');
+		}
+		if (mapperValue.value === null) continue;
+		for (const key of Object.getOwnPropertyNames(mapperValue.value)) {
+			if (UNSAFE_KEYS.has(key) || key.split('__').some((part) => UNSAFE_KEYS.has(part))) {
+				throw new TwentyFieldMappingError('Twenty field mapping contains an unsafe field.');
+			}
+			if (Object.prototype.hasOwnProperty.call(combined, key)) {
+				throw new TwentyFieldMappingError('Twenty field mapping contains a duplicate field.');
+			}
+			combined[key] = mapperValue.value[key];
+		}
+	}
+	return {
+		mappingMode: 'defineBelow',
+		value: combined as ResourceMapperValue['value'],
+		matchingColumns: [],
+		schema: [],
+		attemptToConvertTypes: false,
+		convertFieldsToString: false,
+	};
 }
 
 function mapperValues(value: unknown): Record<string, unknown> {

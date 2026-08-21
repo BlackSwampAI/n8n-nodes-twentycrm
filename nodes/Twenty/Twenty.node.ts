@@ -12,8 +12,9 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { twentyApiCredentialTest } from './shared/credentialTest';
 import {
-	buildRecordMapperFields,
 	buildFixedResourceMapperFields,
+	buildRecordMapperFields,
+	combineRecordMapperValues,
 	reconstructRecordPayload,
 	TwentyFieldMappingError,
 } from './shared/fieldMapping';
@@ -200,7 +201,7 @@ export class Twenty implements INodeType {
 				},
 				displayOptions: {
 					show: {
-						resource: ['record', 'company', 'person'],
+						resource: ['record'],
 						operation: ['create'],
 						inputMode: ['fieldMapping'],
 					},
@@ -226,12 +227,68 @@ export class Twenty implements INodeType {
 				},
 				displayOptions: {
 					show: {
-						resource: ['record', 'company', 'person'],
+						resource: ['record'],
 						operation: ['update'],
 						inputMode: ['fieldMapping'],
 					},
 				},
 			},
+			...(['create', 'update'] as const).flatMap((operation) => [
+				{
+					displayName: 'Common Fields',
+					name: `${operation}CommonFields`,
+					type: 'resourceMapper' as const,
+					default: { mappingMode: 'defineBelow', value: null },
+					required: true,
+					noDataExpression: true,
+					typeOptions: {
+						loadOptionsDependsOn: ['resource', 'operation'],
+						resourceMapper: {
+							resourceMapperMethod:
+								operation === 'create' ? 'getCreateCommonFields' : 'getUpdateCommonFields',
+							mode: 'add' as const,
+							addAllFields: true,
+							supportAutoMap: false,
+							refreshIncompleteSchemaOnOpen: true,
+							refreshStaleSchemaOnOpen: true,
+						},
+					},
+					displayOptions: {
+						show: {
+							resource: ['company', 'person'],
+							operation: [operation],
+							inputMode: ['fieldMapping'],
+						},
+					},
+				},
+				{
+					displayName: 'Additional Fields',
+					name: `${operation}AdditionalFields`,
+					type: 'resourceMapper' as const,
+					default: { mappingMode: 'defineBelow', value: null },
+					required: true,
+					noDataExpression: true,
+					typeOptions: {
+						loadOptionsDependsOn: ['resource', 'operation'],
+						resourceMapper: {
+							resourceMapperMethod:
+								operation === 'create' ? 'getCreateAdditionalFields' : 'getUpdateAdditionalFields',
+							mode: 'add' as const,
+							addAllFields: false,
+							supportAutoMap: false,
+							refreshIncompleteSchemaOnOpen: true,
+							refreshStaleSchemaOnOpen: true,
+						},
+					},
+					displayOptions: {
+						show: {
+							resource: ['company', 'person'],
+							operation: [operation],
+							inputMode: ['fieldMapping'],
+						},
+					},
+				},
+			]),
 			{
 				displayName: 'JSON Input',
 				name: 'jsonInput',
@@ -279,9 +336,7 @@ export class Twenty implements INodeType {
 				default: '',
 				placeholder: 'status[eq]:"open"',
 				description: 'Twenty REST filter expression using workspace field API names',
-				displayOptions: {
-					show: { resource: ['record', 'company', 'person'], operation: ['getMany'] },
-				},
+				displayOptions: { show: { resource: ['__legacyRecord'] } },
 			},
 			{
 				displayName: 'Order By',
@@ -290,9 +345,35 @@ export class Twenty implements INodeType {
 				default: '',
 				placeholder: 'createdAt[DescNullsLast]',
 				description: 'Twenty REST ordering expression using workspace field API names',
+				displayOptions: { show: { resource: ['__legacyRecord'] } },
+			},
+			{
+				displayName: 'Options',
+				name: 'options',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
 				displayOptions: {
 					show: { resource: ['record', 'company', 'person'], operation: ['getMany'] },
 				},
+				options: [
+					{
+						displayName: 'Filter',
+						name: 'filter',
+						type: 'string',
+						default: '',
+						placeholder: 'status[eq]:"open"',
+						description: 'Twenty REST filter expression using workspace field API names',
+					},
+					{
+						displayName: 'Order By',
+						name: 'orderBy',
+						type: 'string',
+						default: '',
+						placeholder: 'createdAt[DescNullsLast]',
+						description: 'Twenty REST ordering expression using workspace field API names',
+					},
+				],
 			},
 			{
 				displayName: 'Include Inactive',
@@ -343,38 +424,40 @@ export class Twenty implements INodeType {
 		},
 		resourceMapping: {
 			async getCreateFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
-				const resource = this.getNodeParameter('resource') as string;
-				const apiName =
-					resource === 'company' || resource === 'person'
-						? resource
-						: (this.getNodeParameter('objectApiName', undefined, {
-								extractValue: true,
-							}) as string | undefined);
+				const apiName = this.getNodeParameter('objectApiName', undefined, {
+					extractValue: true,
+				}) as string | undefined;
 				if (!apiName) return { fields: [] };
 				const object = await createObjectMetadataService(this).getObject(apiName);
-				return {
-					fields:
-						resource === 'company' || resource === 'person'
-							? buildFixedResourceMapperFields(object, 'create', resource)
-							: buildRecordMapperFields(object, 'create'),
-				};
+				return { fields: buildRecordMapperFields(object, 'create') };
 			},
 			async getUpdateFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
-				const resource = this.getNodeParameter('resource') as string;
-				const apiName =
-					resource === 'company' || resource === 'person'
-						? resource
-						: (this.getNodeParameter('objectApiName', undefined, {
-								extractValue: true,
-							}) as string | undefined);
+				const apiName = this.getNodeParameter('objectApiName', undefined, {
+					extractValue: true,
+				}) as string | undefined;
 				if (!apiName) return { fields: [] };
 				const object = await createObjectMetadataService(this).getObject(apiName);
-				return {
-					fields:
-						resource === 'company' || resource === 'person'
-							? buildFixedResourceMapperFields(object, 'update', resource)
-							: buildRecordMapperFields(object, 'update'),
-				};
+				return { fields: buildRecordMapperFields(object, 'update') };
+			},
+			async getCreateCommonFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				const resource = this.getNodeParameter('resource') as 'company' | 'person';
+				const object = await createObjectMetadataService(this).getObject(resource);
+				return { fields: buildFixedResourceMapperFields(object, 'create', resource, 'common') };
+			},
+			async getCreateAdditionalFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				const resource = this.getNodeParameter('resource') as 'company' | 'person';
+				const object = await createObjectMetadataService(this).getObject(resource);
+				return { fields: buildFixedResourceMapperFields(object, 'create', resource, 'additional') };
+			},
+			async getUpdateCommonFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				const resource = this.getNodeParameter('resource') as 'company' | 'person';
+				const object = await createObjectMetadataService(this).getObject(resource);
+				return { fields: buildFixedResourceMapperFields(object, 'update', resource, 'common') };
+			},
+			async getUpdateAdditionalFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				const resource = this.getNodeParameter('resource') as 'company' | 'person';
+				const object = await createObjectMetadataService(this).getObject(resource);
+				return { fields: buildFixedResourceMapperFields(object, 'update', resource, 'additional') };
 			},
 		},
 	};
@@ -384,6 +467,7 @@ export class Twenty implements INodeType {
 		const metadataService = createObjectMetadataService(this);
 		const recordService = createRecordService(this, metadataService);
 		const mappedInput = async (
+			resource: string,
 			objectApiName: string,
 			operation: 'create' | 'update',
 			itemIndex: number,
@@ -395,11 +479,17 @@ export class Twenty implements INodeType {
 					itemIndex,
 				});
 			}
-			const mapper = this.getNodeParameter(
-				operation === 'create' ? 'createFields' : 'updateFields',
-				itemIndex,
-			) as ResourceMapperValue;
 			try {
+				const mapper =
+					resource === 'company' || resource === 'person'
+						? combineRecordMapperValues(
+								this.getNodeParameter(`${operation}CommonFields`, itemIndex),
+								this.getNodeParameter(`${operation}AdditionalFields`, itemIndex),
+							)
+						: (this.getNodeParameter(
+								operation === 'create' ? 'createFields' : 'updateFields',
+								itemIndex,
+							) as ResourceMapperValue);
 				return reconstructRecordPayload(await metadataService.getObject(objectApiName), mapper);
 			} catch (error) {
 				if (error instanceof TwentyFieldMappingError) {
@@ -437,7 +527,7 @@ export class Twenty implements INodeType {
 								extractValue: true,
 							}) as string);
 				if (operation === 'create') {
-					const input = await mappedInput(objectApiName, 'create', itemIndex);
+					const input = await mappedInput(resource, objectApiName, 'create', itemIndex);
 					output.push({
 						json: { ...(await recordService.create(objectApiName, input)) },
 						pairedItem: itemIndex,
@@ -447,7 +537,7 @@ export class Twenty implements INodeType {
 				if (operation === 'get' || operation === 'update' || operation === 'delete') {
 					const recordId = this.getNodeParameter('recordId', itemIndex) as string;
 					if (operation === 'update') {
-						const input = await mappedInput(objectApiName, 'update', itemIndex);
+						const input = await mappedInput(resource, objectApiName, 'update', itemIndex);
 						output.push({
 							json: { ...(await recordService.update(objectApiName, recordId, input)) },
 							pairedItem: itemIndex,
@@ -468,11 +558,18 @@ export class Twenty implements INodeType {
 					continue;
 				}
 				const returnAll = this.getNodeParameter('returnAll', itemIndex) as boolean;
+				const options = this.getNodeParameter('options', itemIndex, {}) as Record<string, unknown>;
+				const legacyFilter = this.getNodeParameter('filter', itemIndex, '') as string;
+				const legacyOrderBy = this.getNodeParameter('orderBy', itemIndex, '') as string;
 				const records = await recordService.getMany(objectApiName, {
 					returnAll,
 					limit: returnAll ? undefined : (this.getNodeParameter('limit', itemIndex) as number),
-					filter: this.getNodeParameter('filter', itemIndex, '') as string,
-					orderBy: this.getNodeParameter('orderBy', itemIndex, '') as string,
+					filter: Object.prototype.hasOwnProperty.call(options, 'filter')
+						? (options.filter as string)
+						: legacyFilter,
+					orderBy: Object.prototype.hasOwnProperty.call(options, 'orderBy')
+						? (options.orderBy as string)
+						: legacyOrderBy,
 				});
 				output.push(...records.map((record) => ({ json: { ...record }, pairedItem: itemIndex })));
 				continue;
