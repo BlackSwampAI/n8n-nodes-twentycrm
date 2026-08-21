@@ -22,6 +22,12 @@ export class Twenty implements INodeType {
 		defaults: {
 			name: 'Twenty CRM',
 		},
+		credentials: [
+			{
+				name: 'twentyApi',
+				required: true,
+			},
+		],
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		properties: [

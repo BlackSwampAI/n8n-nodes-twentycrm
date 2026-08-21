@@ -44,9 +44,11 @@
 	"n8n": {
 		"n8nNodesApiVersion": 1,
 		"strict": true,
-		"credentials": [],
+		"credentials": [
+			"dist/credentials/TwentyApi.credentials.js"
+		],
 		"nodes": [
-			"dist/Twenty.node.js"
+			"dist/nodes/Twenty/Twenty.node.js"
 		]
 	},
 	"devDependencies": {
