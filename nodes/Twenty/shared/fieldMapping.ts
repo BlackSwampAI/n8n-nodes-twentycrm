@@ -154,6 +154,78 @@ export function buildRecordMapperFields(
 	});
 }
 
+const FIXED_PREFERRED_IDS: Readonly<Record<'company' | 'person', readonly string[]>> = {
+	company: [
+		'name',
+		'domainName__primaryLinkUrl',
+		'employees',
+		'address__addressStreet1',
+		'address__addressCity',
+		'address__addressState',
+		'address__addressPostcode',
+		'address__addressCountry',
+	],
+	person: [
+		'name__firstName',
+		'name__lastName',
+		'emails__primaryEmail',
+		'phones__primaryPhoneNumber',
+		'jobTitle',
+		'city',
+	],
+};
+
+export function buildFixedResourceMapperFields(
+	object: NormalizedObjectDefinition,
+	mode: MapperMode,
+	resource: 'company' | 'person',
+	section: 'common' | 'additional' = 'common',
+): ResourceMapperField[] {
+	const preferred = FIXED_PREFERRED_IDS[resource];
+	const rank = new Map(preferred.map((id, index) => [id, index]));
+	return buildRecordMapperFields(object, mode)
+		.filter((field) => (section === 'common' ? rank.has(field.id) : !rank.has(field.id)))
+		.map((field) => (section === 'common' ? { ...field, removed: false } : field))
+		.sort((left, right) => {
+			const leftRank = rank.get(left.id);
+			const rightRank = rank.get(right.id);
+			if (leftRank !== undefined || rightRank !== undefined) {
+				return (leftRank ?? Number.POSITIVE_INFINITY) - (rightRank ?? Number.POSITIVE_INFINITY);
+			}
+			return 0;
+		});
+}
+
+export function combineRecordMapperValues(
+	commonValue: ResourceMapperValue | unknown,
+	additionalValue: ResourceMapperValue | unknown,
+): ResourceMapperValue {
+	const combined: Record<string, unknown> = {};
+	for (const mapperValue of [commonValue, additionalValue]) {
+		if (!isRecord(mapperValue) || (mapperValue.value !== null && !isRecord(mapperValue.value))) {
+			throw new TwentyFieldMappingError('Twenty field mapping input is invalid or stale.');
+		}
+		if (mapperValue.value === null) continue;
+		for (const key of Object.getOwnPropertyNames(mapperValue.value)) {
+			if (UNSAFE_KEYS.has(key) || key.split('__').some((part) => UNSAFE_KEYS.has(part))) {
+				throw new TwentyFieldMappingError('Twenty field mapping contains an unsafe field.');
+			}
+			if (Object.prototype.hasOwnProperty.call(combined, key)) {
+				throw new TwentyFieldMappingError('Twenty field mapping contains a duplicate field.');
+			}
+			combined[key] = mapperValue.value[key];
+		}
+	}
+	return {
+		mappingMode: 'defineBelow',
+		value: combined as ResourceMapperValue['value'],
+		matchingColumns: [],
+		schema: [],
+		attemptToConvertTypes: false,
+		convertFieldsToString: false,
+	};
+}
+
 function mapperValues(value: unknown): Record<string, unknown> {
 	if (!isRecord(value) || !isRecord(value.value)) {
 		throw new TwentyFieldMappingError('Twenty field mapping input is invalid or stale.');
