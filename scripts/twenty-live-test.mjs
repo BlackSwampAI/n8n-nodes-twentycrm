@@ -49,8 +49,8 @@ async function probe(surface, url, query, dataCheck) {
 await probe(
 	'Core GraphQL',
 	urls.coreGraphql,
-	'query HarnessCoreProbe { currentWorkspace { id } }',
-	(data) => typeof data?.currentWorkspace?.id === 'string' && data.currentWorkspace.id.length > 0,
+	'query HarnessCoreProbe { people(first: 1) { edges { node { id } } } }',
+	(data) => Array.isArray(data?.people?.edges) && data.people.edges.length <= 1,
 );
 await probe(
 	'Metadata GraphQL',

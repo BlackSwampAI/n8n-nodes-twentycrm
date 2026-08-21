@@ -37,7 +37,7 @@ Run the two independent read-only probes:
 npm run test:integration
 ```
 
-The test sends Bearer-authenticated GraphQL POST requests to `/graphql` and `/metadata`. Core GraphQL reads only `currentWorkspace { id }`, an authentication-guarded v2.9.0 field, and validates the ID without printing or storing it. Metadata GraphQL reads at most one object metadata entry. Each request has a 15-second timeout. The test rejects HTTP, timeout/network, and GraphQL errors and reports the failing surface without printing raw payloads or the API key.
+The test sends Bearer-authenticated GraphQL POST requests to `/graphql` and `/metadata`. Core GraphQL performs the documented workspace-record list shape `people(first: 1) { edges { node { id } } }`, validating only that the bounded connection shape is present without printing or storing record IDs. Metadata GraphQL reads at most one object metadata entry. Each request has a 15-second timeout. The test rejects HTTP, timeout/network, and GraphQL errors and reports the failing surface without printing raw payloads or the API key.
 
 Other lifecycle commands:
 

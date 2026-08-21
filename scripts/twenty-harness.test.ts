@@ -57,7 +57,7 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain("'Core GraphQL'");
 		expect(liveTest).toContain('urls.coreGraphql');
 		expect(liveTest).toContain('query HarnessCoreProbe');
-		expect(liveTest).toContain('currentWorkspace { id }');
+		expect(liveTest).toContain('people(first: 1)');
 		expect(liveTest).toContain("'Metadata GraphQL'");
 		expect(liveTest).toContain('urls.metadataGraphql');
 		expect(liveTest).toContain('query HarnessMetadataProbe');
@@ -105,8 +105,8 @@ describe('local Twenty harness helpers', () => {
 
 	it('accepts expected GraphQL data and rejects HTTP-200 GraphQL failures safely', () => {
 		expect(() =>
-			validateGraphqlPayload('Core GraphQL', { data: { currentWorkspace: { id: 'id' } } }, (data) =>
-				Boolean((data as { currentWorkspace?: { id?: unknown } })?.currentWorkspace?.id),
+			validateGraphqlPayload('Core GraphQL', { data: { people: { edges: [] } } }, (data) =>
+				Array.isArray((data as { people?: { edges?: unknown } })?.people?.edges),
 			),
 		).not.toThrow();
 		expect(() =>
