@@ -67,10 +67,23 @@ export interface FieldMetadataService {
 	getFields(objectApiName: string): Promise<NormalizedFieldDefinition[]>;
 }
 
+export interface RecordGetManyOptions {
+	returnAll: boolean;
+	limit?: number;
+	filter?: string;
+	orderBy?: string;
+}
+
+export interface RecordDeleteResult {
+	success: true;
+	recordId: string;
+	objectApiName: string;
+}
+
 export interface RecordService {
-	create(objectApiName: string, input: TwentyRecord): Promise<TwentyRecord>;
+	create(objectApiName: string, input: unknown): Promise<TwentyRecord>;
 	get(objectApiName: string, recordId: string): Promise<TwentyRecord>;
-	getMany(objectApiName: string): Promise<TwentyRecord[]>;
-	update(objectApiName: string, recordId: string, input: TwentyRecord): Promise<TwentyRecord>;
-	delete(objectApiName: string, recordId: string): Promise<void>;
+	getMany(objectApiName: string, options: RecordGetManyOptions): Promise<TwentyRecord[]>;
+	update(objectApiName: string, recordId: string, input: unknown): Promise<TwentyRecord>;
+	delete(objectApiName: string, recordId: string): Promise<RecordDeleteResult>;
 }

@@ -4,12 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { Twenty } from './Twenty.node';
 import type { NormalizedObjectDefinition } from './shared/contracts';
 import { createObjectMetadataService } from './shared/metadata';
-import { createRecordReadService } from './shared/records';
+import { createRecordService } from './shared/records';
 
 vi.mock('./shared/metadata', () => ({ createObjectMetadataService: vi.fn() }));
-vi.mock('./shared/records', () => ({ createRecordReadService: vi.fn() }));
+vi.mock('./shared/records', () => ({ createRecordService: vi.fn() }));
 const serviceMock = vi.mocked(createObjectMetadataService);
-const recordServiceMock = vi.mocked(createRecordReadService);
+const recordServiceMock = vi.mocked(createRecordService);
 
 function schemaObject(
 	overrides: Partial<NormalizedObjectDefinition> = {},
@@ -46,7 +46,7 @@ function executeContext(
 }
 
 describe('Twenty CRM Schema Object node', () => {
-	it('exposes Schema Object and Record Get/Get Many with stable resource locators', () => {
+	it('exposes Schema Object reads and Record CRUD with stable resource locators', () => {
 		const node = new Twenty();
 		expect(node.description.displayName).toBe('Twenty CRM');
 		expect(node.description.usableAsTool).toBe(true);
@@ -70,6 +70,14 @@ describe('Twenty CRM Schema Object node', () => {
 				]),
 			);
 		}
+		const recordOperation = operations.find(
+			(property) => property.displayOptions?.show?.resource?.[0] === 'record',
+		);
+		expect(recordOperation?.options).toEqual(
+			expect.arrayContaining(
+				['create', 'delete', 'update'].map((value) => expect.objectContaining({ value })),
+			),
+		);
 		const locators = node.description.properties.filter(({ name }) => name === 'objectApiName');
 		const recordLocator = locators.find(
 			(property) => property.displayOptions?.show?.resource?.[0] === 'record',
@@ -92,6 +100,18 @@ describe('Twenty CRM Schema Object node', () => {
 				}),
 			]),
 		);
+		const recordId = node.description.properties.find(({ name }) => name === 'recordId');
+		expect(recordId).toMatchObject({
+			type: 'string',
+			required: true,
+			displayOptions: { show: { resource: ['record'], operation: ['get', 'update', 'delete'] } },
+		});
+		const jsonInput = node.description.properties.find(({ name }) => name === 'jsonInput');
+		expect(jsonInput).toMatchObject({
+			type: 'json',
+			required: true,
+			displayOptions: { show: { resource: ['record'], operation: ['create', 'update'] } },
+		});
 	});
 
 	it('filters and deterministically sorts active non-system selector entries', async () => {
@@ -168,11 +188,16 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(result[0].map((item) => item.pairedItem)).toEqual([0, 1]);
 	});
 
-	it('executes Record Get/Get Many per input and preserves paired-item provenance', async () => {
+	it('executes Record reads and writes per input with paired-item provenance', async () => {
 		serviceMock.mockReturnValue({ getObject: vi.fn(), getObjects: vi.fn() });
 		const get = vi.fn().mockResolvedValue({ id: 'synthetic-get' });
 		const getMany = vi.fn().mockResolvedValue([{ id: 'synthetic-list' }]);
-		recordServiceMock.mockReturnValue({ get, getMany });
+		const create = vi.fn().mockResolvedValue({ id: 'synthetic-create' });
+		const update = vi.fn().mockResolvedValue({ id: 'synthetic-update' });
+		const remove = vi
+			.fn()
+			.mockResolvedValue({ success: true, recordId: 'delete-id', objectApiName: 'vehicle' });
+		recordServiceMock.mockReturnValue({ get, getMany, create, update, delete: remove });
 		const result = await Twenty.prototype.execute.call(
 			executeContext([
 				{ resource: 'record', operation: 'get', objectApiName: 'vehicle', recordId: 'record-id' },
@@ -185,6 +210,20 @@ describe('Twenty CRM Schema Object node', () => {
 					filter: 'status[eq]:"open"',
 					orderBy: 'createdAt[DescNullsLast]',
 				},
+				{ resource: 'record', operation: 'create', objectApiName: 'vehicle', jsonInput: '{}' },
+				{
+					resource: 'record',
+					operation: 'update',
+					objectApiName: 'vehicle',
+					recordId: 'update-id',
+					jsonInput: { name: 'kept' },
+				},
+				{
+					resource: 'record',
+					operation: 'delete',
+					objectApiName: 'vehicle',
+					recordId: 'delete-id',
+				},
 			]),
 		);
 		expect(get).toHaveBeenCalledWith('vehicle', 'record-id');
@@ -194,7 +233,10 @@ describe('Twenty CRM Schema Object node', () => {
 			filter: 'status[eq]:"open"',
 			orderBy: 'createdAt[DescNullsLast]',
 		});
-		expect(result[0].map((item) => item.pairedItem)).toEqual([0, 1]);
+		expect(create).toHaveBeenCalledWith('vehicle', '{}');
+		expect(update).toHaveBeenCalledWith('vehicle', 'update-id', { name: 'kept' });
+		expect(remove).toHaveBeenCalledWith('vehicle', 'delete-id');
+		expect(result[0].map((item) => item.pairedItem)).toEqual([0, 1, 2, 3, 4]);
 	});
 
 	it('filters Get Many defaults and honors include toggles', async () => {

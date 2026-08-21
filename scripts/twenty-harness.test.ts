@@ -64,7 +64,16 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain('OBJECT_METADATA_QUERY');
 		expect(liveTest).toContain('normalizeTwentyObject');
 		expect(liveTest).toContain('object.fields.length > 0');
-		expect(liveTest).toContain('createRecordReadService');
+		expect(liveTest).toContain('createRecordService');
+		expect(liveTest).toContain('finally');
+		expect(liveTest).toContain('cleanupOwnedLifecycleFixture');
+		expect(liveTest).toContain('findOwnedLifecycleRecords');
+		expect(liveTest).toContain('name[eq]');
+		expect(liveTest).toContain('record.name !== name');
+		expect(liveTest).toContain("lifecycleService.delete('company', createdId)");
+		expect(liveTest).toContain("lifecycleService.delete('company', match.id)");
+		expect(liveTest).toContain('Disposable record cleanup could not verify absence.');
+		expect(liveTest).toContain('crypto.randomUUID()');
 		expect(liveTest).toContain("filter: 'deletedAt[is]:NULL'");
 		expect(liveTest).toContain("orderBy: 'createdAt[AscNullsFirst]'");
 		expect(liveTest).toContain("recordService.get('person'");
