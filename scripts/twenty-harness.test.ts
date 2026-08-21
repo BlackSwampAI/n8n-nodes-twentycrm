@@ -64,6 +64,10 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain('OBJECT_METADATA_QUERY');
 		expect(liveTest).toContain('normalizeTwentyObject');
 		expect(liveTest).toContain('object.fields.length > 0');
+		expect(liveTest).toContain('createRecordReadService');
+		expect(liveTest).toContain("filter: 'deletedAt[is]:NULL'");
+		expect(liveTest).toContain("orderBy: 'createdAt[AscNullsFirst]'");
+		expect(liveTest).toContain("recordService.get('person'");
 		expect(liveTest).not.toMatch(/\bmutation\b/);
 		expect(liveTest).toContain('AbortSignal.timeout(PROBE_TIMEOUT_MS)');
 		expect(liveTest).toContain('const PROBE_TIMEOUT_MS = 15_000');

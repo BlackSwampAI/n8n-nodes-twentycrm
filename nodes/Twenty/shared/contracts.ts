@@ -1,3 +1,5 @@
+import type { IDataObject } from 'n8n-workflow';
+
 export type TwentyApiSurface = 'coreRest' | 'coreGraphql' | 'metadataRest' | 'metadataGraphql';
 
 export interface NormalizedObjectDefinition {
@@ -54,7 +56,7 @@ export interface NormalizedRelationDefinition {
 	target: NormalizedRelationEndpoint;
 }
 
-export type TwentyRecord = Readonly<Record<string, unknown>>;
+export type TwentyRecord = Readonly<IDataObject>;
 
 export interface ObjectMetadataService {
 	getObject(apiName: string): Promise<NormalizedObjectDefinition>;

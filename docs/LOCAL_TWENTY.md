@@ -37,7 +37,7 @@ Run the two independent read-only probes:
 npm run test:integration
 ```
 
-The test sends Bearer-authenticated GraphQL POST requests to `/graphql` and `/metadata`. Core GraphQL performs the documented workspace-record list shape `people(first: 1) { edges { node { id } } }`, validating only that the bounded connection shape is present without printing or storing record IDs. Metadata GraphQL first performs a bounded route probe, then runs the compiled paginated object-discovery query and normalizer and verifies that a usable standard object with fields exists. Each request has a 15-second timeout. The test rejects HTTP, timeout/network, GraphQL, malformed-schema, and cursor-loop errors and reports the failing surface without printing names, identifiers, counts, raw payloads, or the API key.
+The test sends Bearer-authenticated GraphQL requests to `/graphql` and `/metadata`, then exercises the compiled generic Record read service against Core REST. Core GraphQL validates a bounded connection shape. Metadata GraphQL runs the compiled paginated discovery query and normalizer. Core REST performs one bounded filtered/ordered list read and one single-record read using only an identifier held in memory. Each request has a 15-second timeout. The test rejects HTTP, timeout/network, GraphQL, malformed-envelope, and cursor-loop errors and reports only the failing surface without printing names, identifiers, record values, counts, raw payloads, or the API key.
 
 Other lifecycle commands:
 

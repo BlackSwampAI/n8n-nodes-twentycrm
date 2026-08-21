@@ -16,6 +16,8 @@ const metadataPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/m
 const { createObjectMetadataService, normalizeTwentyObject, OBJECT_METADATA_QUERY } = require(
 	metadataPath,
 );
+const recordsPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/records.js');
+const { createRecordReadService } = require(recordsPath);
 
 if (node.description.displayName !== 'Twenty CRM' || node.description.name !== 'twenty') {
 	throw new Error('Compiled Twenty CRM node identity did not load as expected');
@@ -31,6 +33,7 @@ if (
 	typeof createTwentyNodeApiError !== 'function' ||
 	typeof createObjectMetadataService !== 'function' ||
 	typeof normalizeTwentyObject !== 'function' ||
+	typeof createRecordReadService !== 'function' ||
 	!OBJECT_METADATA_QUERY.includes('objects(paging: { first: 1000')
 ) {
 	throw new Error('Compiled authenticated transport foundation did not load as expected');

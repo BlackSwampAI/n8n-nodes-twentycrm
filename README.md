@@ -30,7 +30,9 @@ Testing the credential sends a read-only Core GraphQL `__typename` query to vali
 
 The `Schema Object` resource provides read-only `Get` and `Get Many` operations backed by authenticated Metadata GraphQL discovery. `Get` saves the stable singular API name, while `Get Many` defaults to active, non-system objects and can optionally include inactive or system definitions. The same active, non-system discovery supplies the reusable object selector for standard and custom objects.
 
-Discovery uses one shared authenticated request path with sanitized status/network/GraphQL diagnostics and conservative retries. Metadata GraphQL POST requests are explicitly marked read-only and safe for retry, make at most three total attempts on transient failures, and never expose raw response or credential data through terminal errors. Record operations and schema mutations are not available yet. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
+The `Record` resource provides read-only `Get` and `Get Many` for active standard and custom workspace objects. It resolves the saved singular API name through metadata and routes Core REST through the discovered plural API name. `Get Many` supports an exact bounded limit or safe cursor-based Return All, plus Twenty's documented raw REST `filter` and `order_by` expression strings using workspace field API names. Responses retain the record JSON returned by Twenty.
+
+Discovery and record reads use one shared authenticated request path with sanitized status/network/GraphQL diagnostics and conservative retries. Metadata GraphQL POST requests are explicitly marked read-only and safe for retry, make at most three total attempts on transient failures, and never expose raw response or credential data through terminal errors. Record writes and schema mutations are not available yet. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
 
 ## Resources
 
