@@ -6,6 +6,11 @@ import type {
 	INodeCredentialTestResult,
 } from 'n8n-workflow';
 
+import {
+	classifyTwentyError,
+	classifyTwentyGraphqlResponse,
+	credentialFailureMessage,
+} from './errors';
 import { deriveTwentyApiUrls } from './urls';
 
 const CREDENTIAL_TEST_QUERY = 'query CredentialTest { __typename }';
@@ -55,12 +60,23 @@ export async function twentyApiCredentialTest(
 			json: true,
 		});
 
+		const graphqlFailure = classifyTwentyGraphqlResponse(response);
+		if (graphqlFailure) {
+			return { status: 'Error', message: credentialFailureMessage(graphqlFailure) };
+		}
 		if (!isSuccessfulCredentialResponse(response)) {
-			throw new Error('Unexpected GraphQL response');
+			return { status: 'Error', message: CREDENTIAL_TEST_FAILURE_MESSAGE };
 		}
 
 		return { status: 'OK', message: 'Connection successful' };
-	} catch {
-		return { status: 'Error', message: CREDENTIAL_TEST_FAILURE_MESSAGE };
+	} catch (error) {
+		const failure = classifyTwentyError(error);
+		return {
+			status: 'Error',
+			message:
+				failure.kind === 'unknown'
+					? CREDENTIAL_TEST_FAILURE_MESSAGE
+					: credentialFailureMessage(failure),
+		};
 	}
 }

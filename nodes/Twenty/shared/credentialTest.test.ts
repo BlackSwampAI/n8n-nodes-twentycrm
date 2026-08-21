@@ -42,7 +42,13 @@ describe('twentyApiCredentialTest', () => {
 	});
 
 	it('returns a safe failure for invalid authentication or request errors', async () => {
-		const request = vi.fn().mockRejectedValue(new Error('401 for test-api-key private-response'));
+		const request = vi.fn().mockRejectedValue({
+			response: {
+				status: 401,
+				headers: { Authorization: 'Bearer test-api-key' },
+				data: { message: 'private-response' },
+			},
+		});
 
 		const result = await twentyApiCredentialTest.call(
 			context(request),
@@ -51,24 +57,47 @@ describe('twentyApiCredentialTest', () => {
 
 		expect(result).toEqual({
 			status: 'Error',
-			message: 'Unable to connect with these Twenty API settings.',
+			message:
+				'Twenty API authentication failed. Check that the API key is valid and has not expired.',
 		});
 		expect(result.message).not.toContain('test-api-key');
 		expect(result.message).not.toContain('private-response');
 	});
 
-	it.each([
-		['malformed response', { data: {} }],
-		['GraphQL errors', { data: { __typename: 'Query' }, errors: [{ message: 'private' }] }],
-	])('returns a safe failure for a %s', async (_case, response) => {
-		const request = vi.fn().mockResolvedValue(response);
+	it.each([['malformed response', { data: {} }]])(
+		'returns a safe failure for a %s',
+		async (_case, response) => {
+			const request = vi.fn().mockResolvedValue(response);
 
-		await expect(
-			twentyApiCredentialTest.call(context(request), credential('https://api.twenty.com')),
-		).resolves.toEqual({
-			status: 'Error',
-			message: 'Unable to connect with these Twenty API settings.',
+			await expect(
+				twentyApiCredentialTest.call(context(request), credential('https://api.twenty.com')),
+			).resolves.toEqual({
+				status: 'Error',
+				message: 'Unable to connect with these Twenty API settings.',
+			});
+		},
+	);
+
+	it('returns an actionable, redacted failure for GraphQL errors', async () => {
+		const request = vi.fn().mockResolvedValue({
+			data: { __typename: 'Query' },
+			errors: [
+				{ message: 'test-api-key private-response', extensions: { code: 'UNAUTHENTICATED' } },
+			],
 		});
+
+		const result = await twentyApiCredentialTest.call(
+			context(request),
+			credential('https://api.twenty.com'),
+		);
+
+		expect(result).toEqual({
+			status: 'Error',
+			message:
+				'Twenty API authentication failed. Check that the API key is valid and has not expired.',
+		});
+		expect(JSON.stringify(result)).not.toContain('test-api-key');
+		expect(JSON.stringify(result)).not.toContain('private-response');
 	});
 
 	it('returns a safe failure for an invalid Base URL without requesting', async () => {
@@ -78,7 +107,8 @@ describe('twentyApiCredentialTest', () => {
 			twentyApiCredentialTest.call(context(request), credential('not-a-url')),
 		).resolves.toEqual({
 			status: 'Error',
-			message: 'Unable to connect with these Twenty API settings.',
+			message:
+				'Unable to reach the Twenty API. Check the Base URL, DNS, TLS certificate, and network access to the self-hosted or Twenty Cloud instance.',
 		});
 		expect(request).not.toHaveBeenCalled();
 	});
