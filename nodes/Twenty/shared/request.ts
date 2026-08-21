@@ -1,13 +1,19 @@
-/* eslint-disable @n8n/community-nodes/require-node-api-error -- Internal validation errors are caught and converted to NodeOperationError with context. */
+/* eslint-disable @n8n/community-nodes/require-node-api-error -- Pure path and credential-shape validation failures are caught and converted to sanitized NodeApiError instances with node context. */
 import type {
 	IDataObject,
 	IExecuteFunctions,
 	IHttpRequestMethods,
 	ILoadOptionsFunctions,
 } from 'n8n-workflow';
-import { NodeOperationError } from 'n8n-workflow';
+import { sleep } from 'n8n-workflow';
 
 import type { TwentyApiSurface } from './contracts';
+import {
+	classifyTwentyError,
+	classifyTwentyGraphqlResponse,
+	createTwentyNodeApiError,
+	retryDelayMs,
+} from './errors';
 import { deriveTwentyApiUrls } from './urls';
 
 type TwentyRequestContext = IExecuteFunctions | ILoadOptionsFunctions;
@@ -18,6 +24,15 @@ export interface TwentyRequestOptions {
 	path?: string;
 	query?: IDataObject;
 	body?: IDataObject | IDataObject[];
+	retry?: 'auto' | 'safe' | 'never';
+}
+
+const MAX_ATTEMPTS = 3;
+
+function canRetry(method: IHttpRequestMethods, mode: TwentyRequestOptions['retry']): boolean {
+	if (mode === 'never') return false;
+	if (mode === 'safe') return true;
+	return method === 'GET' || method === 'HEAD';
 }
 
 function normalizeRequestPath(path = ''): string {
@@ -46,6 +61,7 @@ export async function twentyApiRequest<T = unknown>(
 	context: TwentyRequestContext,
 	options: TwentyRequestOptions,
 ): Promise<T> {
+	let requestUrl: string;
 	try {
 		const credentials = await context.getCredentials('twentyApi');
 		if (typeof credentials.baseUrl !== 'string') {
@@ -54,14 +70,42 @@ export async function twentyApiRequest<T = unknown>(
 
 		const urls = deriveTwentyApiUrls(credentials.baseUrl);
 		const path = normalizeRequestPath(options.path);
-		return (await context.helpers.httpRequestWithAuthentication.call(context, 'twentyApi', {
-			method: options.method,
-			url: `${urls[options.surface]}${path}`,
-			qs: options.query,
-			body: options.body,
-			json: true,
-		})) as T;
-	} catch {
-		throw new NodeOperationError(context.getNode(), 'Twenty API request failed');
+		requestUrl = `${urls[options.surface]}${path}`;
+	} catch (error) {
+		throw createTwentyNodeApiError(context.getNode(), classifyTwentyError(error));
 	}
+
+	for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+		let response: T;
+		try {
+			response = (await context.helpers.httpRequestWithAuthentication.call(context, 'twentyApi', {
+				method: options.method,
+				url: requestUrl,
+				qs: options.query,
+				body: options.body,
+				json: true,
+			})) as T;
+		} catch (error) {
+			const failure = classifyTwentyError(error);
+			if (
+				attempt < MAX_ATTEMPTS - 1 &&
+				canRetry(options.method, options.retry) &&
+				failure.retryable
+			) {
+				await sleep(retryDelayMs(failure, attempt));
+				continue;
+			}
+			throw createTwentyNodeApiError(context.getNode(), failure);
+		}
+
+		const graphqlFailure = options.surface.toLowerCase().includes('graphql')
+			? classifyTwentyGraphqlResponse(response)
+			: undefined;
+		if (graphqlFailure) {
+			throw createTwentyNodeApiError(context.getNode(), graphqlFailure);
+		}
+		return response;
+	}
+
+	throw createTwentyNodeApiError(context.getNode(), classifyTwentyError(undefined));
 }

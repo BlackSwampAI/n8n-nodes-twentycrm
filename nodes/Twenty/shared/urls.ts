@@ -9,25 +9,36 @@ export interface TwentyApiUrls {
 	metadataGraphql: string;
 }
 
+export class TwentyUrlError extends Error {
+	constructor() {
+		super('Invalid Twenty Base URL');
+		this.name = 'TwentyUrlError';
+	}
+}
+
+function invalidTwentyUrl(): never {
+	throw new TwentyUrlError();
+}
+
 export function normalizeTwentyRootUrl(input: string): string {
 	const value = input.trim();
 
 	if (value.includes('?') || value.includes('#')) {
-		throw new Error('Twenty Base URL must not contain a query string or fragment');
+		invalidTwentyUrl();
 	}
 
 	let url: URL;
 	try {
 		url = new URL(value);
 	} catch {
-		throw new Error('Twenty Base URL must be an absolute HTTP or HTTPS URL');
+		invalidTwentyUrl();
 	}
 
 	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-		throw new Error('Twenty Base URL must use HTTP or HTTPS');
+		invalidTwentyUrl();
 	}
 	if (url.username || url.password) {
-		throw new Error('Twenty Base URL must not contain user information');
+		invalidTwentyUrl();
 	}
 
 	let path = url.pathname.replace(/\/+$/, '');

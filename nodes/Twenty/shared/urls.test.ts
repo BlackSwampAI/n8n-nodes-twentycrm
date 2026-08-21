@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveTwentyApiUrls, normalizeTwentyRootUrl } from './urls';
+import { deriveTwentyApiUrls, normalizeTwentyRootUrl, TwentyUrlError } from './urls';
 
 describe('normalizeTwentyRootUrl', () => {
 	it.each([
@@ -39,7 +39,7 @@ describe('normalizeTwentyRootUrl', () => {
 		'https://twenty.example.com#',
 		'https://twenty.example.com#settings',
 	])('rejects invalid root %s', (input) => {
-		expect(() => normalizeTwentyRootUrl(input)).toThrow();
+		expect(() => normalizeTwentyRootUrl(input)).toThrow(TwentyUrlError);
 	});
 
 	it.each([

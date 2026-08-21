@@ -26,7 +26,7 @@ Testing the credential sends a read-only Core GraphQL `__typename` query to vali
 
 ## Operations
 
-No operations are available yet. The current `Twenty CRM` node remains a non-networking shell that fails with a clear development-stage message if executed. Future operations will use one shared authenticated request path; no retry behavior is implemented yet. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
+No operations are available yet. The current `Twenty CRM` node remains a non-networking shell that fails with a clear development-stage message if executed. Future operations will use one shared authenticated request path with sanitized status/network/GraphQL diagnostics and conservative retries: GET and HEAD retry transient failures automatically, other read-only requests require an explicit safe assertion, and all requests can disable retries. A request makes at most three total attempts and never exposes raw response or credential data through its terminal error. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
 
 ## Resources
 
