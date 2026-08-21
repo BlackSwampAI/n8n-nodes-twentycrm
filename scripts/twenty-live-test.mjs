@@ -19,6 +19,9 @@ const { normalizeTwentyObject, OBJECT_METADATA_QUERY } = require(
 	resolve(root, 'dist/nodes/Twenty/shared/metadata.js'),
 );
 const { createRecordService } = require(resolve(root, 'dist/nodes/Twenty/shared/records.js'));
+const { reconstructRecordPayload } = require(
+	resolve(root, 'dist/nodes/Twenty/shared/fieldMapping.js'),
+);
 const baseUrl = `http://127.0.0.1:${env.TWENTY_PORT || '3020'}`;
 const urls = deriveTwentyApiUrls(baseUrl);
 const PROBE_TIMEOUT_MS = 15_000;
@@ -156,8 +159,24 @@ const lifecycleService = createRecordService(liveContext, {
 	getObject: async () => lifecycleObject,
 	getObjects: async () => [lifecycleObject],
 });
-const fixtureName = `n8n-pr8-${crypto.randomUUID()}`;
+const fixtureName = `n8n-pr9-${crypto.randomUUID()}`;
 const updatedName = `${fixtureName}-updated`;
+const fixtureAddress = `mapped-${crypto.randomUUID()}`;
+const updatedAddress = `${fixtureAddress}-updated`;
+const addressField = lifecycleObject.fields.find(
+	(field) => field.type === 'ADDRESS' && field.isActive && !field.isReadOnly && !field.isSystem,
+);
+if (!addressField) throw new Error('Live mapping qualification compound field is unavailable.');
+function mappedValue(value) {
+	return {
+		mappingMode: 'defineBelow',
+		value,
+		matchingColumns: [],
+		schema: [],
+		attemptToConvertTypes: false,
+		convertFieldsToString: false,
+	};
+}
 let createdId;
 
 async function findOwnedLifecycleRecords(name) {
@@ -203,19 +222,48 @@ async function cleanupOwnedLifecycleFixture() {
 
 let lifecycleFailure;
 try {
-	const created = await lifecycleService.create('company', { name: fixtureName });
-	if (typeof created.id !== 'string' || created.id.length === 0 || created.name !== fixtureName) {
+	const createPayload = reconstructRecordPayload(
+		lifecycleObject,
+		mappedValue({
+			name: fixtureName,
+			[`${addressField.apiName}__addressCity`]: fixtureAddress,
+		}),
+	);
+	const created = await lifecycleService.create('company', createPayload);
+	if (
+		typeof created.id !== 'string' ||
+		created.id.length === 0 ||
+		created.name !== fixtureName ||
+		created[addressField.apiName]?.addressCity !== fixtureAddress
+	) {
 		throw new Error('Record Create returned an unexpected shape.');
 	}
 	createdId = created.id;
 	const fetched = await lifecycleService.get('company', createdId);
 	if (fetched.name !== fixtureName)
 		throw new Error('Record Get did not verify the created fixture.');
-	const updated = await lifecycleService.update('company', createdId, { name: updatedName });
-	if (updated.name !== updatedName) throw new Error('Record Update returned an unexpected shape.');
+	const updatePayload = reconstructRecordPayload(
+		lifecycleObject,
+		mappedValue({
+			name: updatedName,
+			[`${addressField.apiName}__addressCity`]: updatedAddress,
+		}),
+	);
+	const updated = await lifecycleService.update('company', createdId, updatePayload);
+	if (
+		updated.name !== updatedName ||
+		updated[addressField.apiName]?.addressCity !== updatedAddress
+	) {
+		throw new Error('Record Update returned an unexpected shape.');
+	}
 	const verified = await lifecycleService.get('company', createdId);
-	if (verified.name !== updatedName) throw new Error('Record Get did not verify the update.');
-	console.log('Compiled Core REST Record Create/Get/Update qualification passed.');
+	if (
+		verified.name !== updatedName ||
+		verified[addressField.apiName]?.addressCity !== updatedAddress
+	) {
+		throw new Error('Record Get did not verify the update.');
+	}
+	console.log('Compiled mapped Record scalar/compound Create/Get/Update qualification passed.');
 } catch (error) {
 	lifecycleFailure = error;
 } finally {

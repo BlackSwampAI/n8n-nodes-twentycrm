@@ -65,6 +65,9 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain('normalizeTwentyObject');
 		expect(liveTest).toContain('object.fields.length > 0');
 		expect(liveTest).toContain('createRecordService');
+		expect(liveTest).toContain('reconstructRecordPayload');
+		expect(liveTest).toContain("field.type === 'ADDRESS'");
+		expect(liveTest).toContain('__addressCity');
 		expect(liveTest).toContain('finally');
 		expect(liveTest).toContain('cleanupOwnedLifecycleFixture');
 		expect(liveTest).toContain('findOwnedLifecycleRecords');

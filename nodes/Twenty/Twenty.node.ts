@@ -5,10 +5,17 @@ import type {
 	INodeListSearchResult,
 	INodeType,
 	INodeTypeDescription,
+	ResourceMapperFields,
+	ResourceMapperValue,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { twentyApiCredentialTest } from './shared/credentialTest';
+import {
+	buildRecordMapperFields,
+	reconstructRecordPayload,
+	TwentyFieldMappingError,
+} from './shared/fieldMapping';
 import { createObjectMetadataService } from './shared/metadata';
 import { createRecordService } from './shared/records';
 
@@ -138,13 +145,70 @@ export class Twenty implements INodeType {
 				displayOptions: { show: { resource: ['record'], operation: ['get', 'update', 'delete'] } },
 			},
 			{
+				displayName: 'Input Mode',
+				name: 'inputMode',
+				type: 'options',
+				default: 'fieldMapping',
+				options: [
+					{ name: 'Field Mapping', value: 'fieldMapping' },
+					{ name: 'JSON', value: 'json' },
+				],
+				displayOptions: { show: { resource: ['record'], operation: ['create', 'update'] } },
+			},
+			{
+				displayName: 'Fields',
+				name: 'createFields',
+				type: 'resourceMapper',
+				default: { mappingMode: 'defineBelow', value: null },
+				required: true,
+				noDataExpression: true,
+				typeOptions: {
+					loadOptionsDependsOn: ['objectApiName.value', 'operation'],
+					resourceMapper: {
+						resourceMapperMethod: 'getCreateFields',
+						mode: 'add',
+						addAllFields: false,
+						supportAutoMap: false,
+						refreshIncompleteSchemaOnOpen: true,
+						refreshStaleSchemaOnOpen: true,
+					},
+				},
+				displayOptions: {
+					show: { resource: ['record'], operation: ['create'], inputMode: ['fieldMapping'] },
+				},
+			},
+			{
+				displayName: 'Fields',
+				name: 'updateFields',
+				type: 'resourceMapper',
+				default: { mappingMode: 'defineBelow', value: null },
+				required: true,
+				noDataExpression: true,
+				typeOptions: {
+					loadOptionsDependsOn: ['objectApiName.value', 'operation'],
+					resourceMapper: {
+						resourceMapperMethod: 'getUpdateFields',
+						mode: 'add',
+						addAllFields: false,
+						supportAutoMap: false,
+						refreshIncompleteSchemaOnOpen: true,
+						refreshStaleSchemaOnOpen: true,
+					},
+				},
+				displayOptions: {
+					show: { resource: ['record'], operation: ['update'], inputMode: ['fieldMapping'] },
+				},
+			},
+			{
 				displayName: 'JSON Input',
 				name: 'jsonInput',
 				type: 'json',
 				default: '{}',
 				required: true,
 				description: 'Record fields as a JSON object',
-				displayOptions: { show: { resource: ['record'], operation: ['create', 'update'] } },
+				displayOptions: {
+					show: { resource: ['record'], operation: ['create', 'update'], inputMode: ['json'] },
+				},
 			},
 			{
 				displayName: 'Return All',
@@ -230,12 +294,59 @@ export class Twenty implements INodeType {
 				};
 			},
 		},
+		resourceMapping: {
+			async getCreateFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				const apiName = this.getNodeParameter('objectApiName', undefined, {
+					extractValue: true,
+				}) as string | undefined;
+				if (!apiName) return { fields: [] };
+				const object = await createObjectMetadataService(this).getObject(apiName);
+				return { fields: buildRecordMapperFields(object, 'create') };
+			},
+			async getUpdateFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
+				const apiName = this.getNodeParameter('objectApiName', undefined, {
+					extractValue: true,
+				}) as string | undefined;
+				if (!apiName) return { fields: [] };
+				const object = await createObjectMetadataService(this).getObject(apiName);
+				return { fields: buildRecordMapperFields(object, 'update') };
+			},
+		},
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const output: INodeExecutionData[] = [];
 		const metadataService = createObjectMetadataService(this);
 		const recordService = createRecordService(this, metadataService);
+		const mappedInput = async (
+			objectApiName: string,
+			operation: 'create' | 'update',
+			itemIndex: number,
+		): Promise<unknown> => {
+			const inputMode = this.getNodeParameter('inputMode', itemIndex, 'json') as string;
+			if (inputMode === 'json') return this.getNodeParameter('jsonInput', itemIndex);
+			if (inputMode !== 'fieldMapping') {
+				throw new NodeOperationError(this.getNode(), 'Unsupported Twenty CRM input mode.', {
+					itemIndex,
+				});
+			}
+			const mapper = this.getNodeParameter(
+				operation === 'create' ? 'createFields' : 'updateFields',
+				itemIndex,
+			) as ResourceMapperValue;
+			try {
+				return reconstructRecordPayload(await metadataService.getObject(objectApiName), mapper);
+			} catch (error) {
+				if (error instanceof TwentyFieldMappingError) {
+					throw new NodeOperationError(this.getNode(), error.message, { itemIndex });
+				}
+				throw new NodeOperationError(
+					this.getNode(),
+					'Unable to prepare the Twenty record field mapping.',
+					{ itemIndex },
+				);
+			}
+		};
 		for (let itemIndex = 0; itemIndex < this.getInputData().length; itemIndex++) {
 			const resource = this.getNodeParameter('resource', itemIndex) as string;
 			if (resource !== 'schemaObject' && resource !== 'record') {
@@ -258,7 +369,7 @@ export class Twenty implements INodeType {
 					extractValue: true,
 				}) as string;
 				if (operation === 'create') {
-					const input = this.getNodeParameter('jsonInput', itemIndex);
+					const input = await mappedInput(objectApiName, 'create', itemIndex);
 					output.push({
 						json: { ...(await recordService.create(objectApiName, input)) },
 						pairedItem: itemIndex,
@@ -268,7 +379,7 @@ export class Twenty implements INodeType {
 				if (operation === 'get' || operation === 'update' || operation === 'delete') {
 					const recordId = this.getNodeParameter('recordId', itemIndex) as string;
 					if (operation === 'update') {
-						const input = this.getNodeParameter('jsonInput', itemIndex);
+						const input = await mappedInput(objectApiName, 'update', itemIndex);
 						output.push({
 							json: { ...(await recordService.update(objectApiName, recordId, input)) },
 							pairedItem: itemIndex,
