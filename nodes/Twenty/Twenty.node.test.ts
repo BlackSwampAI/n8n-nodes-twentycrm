@@ -132,7 +132,7 @@ describe('Twenty CRM Schema Object node', () => {
 			type: 'resourceMapper',
 			typeOptions: {
 				resourceMapper: {
-					mode: 'update',
+					mode: 'add',
 					resourceMapperMethod: 'getUpdateFields',
 					supportAutoMap: false,
 				},

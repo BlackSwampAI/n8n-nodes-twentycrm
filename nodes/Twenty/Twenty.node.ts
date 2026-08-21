@@ -188,7 +188,7 @@ export class Twenty implements INodeType {
 					loadOptionsDependsOn: ['objectApiName.value', 'operation'],
 					resourceMapper: {
 						resourceMapperMethod: 'getUpdateFields',
-						mode: 'update',
+						mode: 'add',
 						addAllFields: false,
 						supportAutoMap: false,
 						refreshIncompleteSchemaOnOpen: true,
