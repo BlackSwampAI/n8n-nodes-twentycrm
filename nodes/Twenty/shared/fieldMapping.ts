@@ -154,6 +154,46 @@ export function buildRecordMapperFields(
 	});
 }
 
+const FIXED_PREFERRED_IDS: Readonly<Record<'company' | 'person', readonly string[]>> = {
+	company: [
+		'name',
+		'domainName__primaryLinkUrl',
+		'employees',
+		'address__addressStreet1',
+		'address__addressCity',
+		'address__addressState',
+		'address__addressPostcode',
+		'address__addressCountry',
+	],
+	person: [
+		'name__firstName',
+		'name__lastName',
+		'emails__primaryEmail',
+		'phones__primaryPhoneNumber',
+		'jobTitle',
+		'city',
+	],
+};
+
+export function buildFixedResourceMapperFields(
+	object: NormalizedObjectDefinition,
+	mode: MapperMode,
+	resource: 'company' | 'person',
+): ResourceMapperField[] {
+	const preferred = FIXED_PREFERRED_IDS[resource];
+	const rank = new Map(preferred.map((id, index) => [id, index]));
+	return buildRecordMapperFields(object, mode)
+		.map((field) => (rank.has(field.id) ? { ...field, removed: false } : field))
+		.sort((left, right) => {
+			const leftRank = rank.get(left.id);
+			const rightRank = rank.get(right.id);
+			if (leftRank !== undefined || rightRank !== undefined) {
+				return (leftRank ?? Number.POSITIVE_INFINITY) - (rightRank ?? Number.POSITIVE_INFINITY);
+			}
+			return 0;
+		});
+}
+
 function mapperValues(value: unknown): Record<string, unknown> {
 	if (!isRecord(value) || !isRecord(value.value)) {
 		throw new TwentyFieldMappingError('Twenty field mapping input is invalid or stale.');

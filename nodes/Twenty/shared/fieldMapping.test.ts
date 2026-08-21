@@ -3,6 +3,7 @@ import { isObjectEmpty } from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 import {
 	buildRecordMapperFields,
+	buildFixedResourceMapperFields,
 	reconstructRecordPayload,
 	TwentyFieldMappingError,
 } from './fieldMapping';
@@ -53,6 +54,88 @@ function mapper(value: Record<string, unknown>) {
 }
 
 describe('Twenty record field mapping', () => {
+	it('surfaces fixed-resource common fields first while retaining custom additional fields', () => {
+		const metadata = object([
+			field({ apiName: 'customValue', label: 'Custom Value' }),
+			field({ apiName: 'employees', label: 'Employees', type: 'NUMBER' }),
+			field({ apiName: 'address', label: 'Address', type: 'ADDRESS' }),
+			field({ apiName: 'domainName', label: 'Domain Name', type: 'LINKS' }),
+			field({ apiName: 'name', label: 'Name' }),
+		]);
+		const fixed = buildFixedResourceMapperFields(metadata, 'create', 'company');
+		expect(fixed.slice(0, 8).map(({ id }) => id)).toEqual([
+			'name',
+			'domainName__primaryLinkUrl',
+			'employees',
+			'address__addressStreet1',
+			'address__addressCity',
+			'address__addressState',
+			'address__addressPostcode',
+			'address__addressCountry',
+		]);
+		expect(fixed.slice(0, 8).every(({ removed }) => removed === false)).toBe(true);
+		expect(fixed.find(({ id }) => id === 'customValue')).toMatchObject({ removed: true });
+		const generic = buildRecordMapperFields(metadata, 'create');
+		expect(generic.map(({ id }) => id)).toEqual([
+			'address__addressStreet1',
+			'address__addressStreet2',
+			'address__addressCity',
+			'address__addressPostcode',
+			'address__addressState',
+			'address__addressCountry',
+			'address__addressLat',
+			'address__addressLng',
+			'customValue',
+			'domainName__primaryLinkLabel',
+			'domainName__primaryLinkUrl',
+			'domainName__secondaryLinks',
+			'employees',
+			'name',
+		]);
+		expect(generic.every(({ removed }) => removed === true)).toBe(true);
+	});
+
+	it('surfaces preferred Person compounds in order and safely skips missing metadata', () => {
+		const metadata = object([
+			field({ apiName: 'customValue', label: 'Custom Value' }),
+			field({ apiName: 'phones', label: 'Phones', type: 'PHONES' }),
+			field({ apiName: 'jobTitle', label: 'Job Title' }),
+			field({ apiName: 'name', label: 'Name', type: 'FULL_NAME' }),
+			field({ apiName: 'emails', label: 'Emails', type: 'EMAILS' }),
+			field({ apiName: 'city', label: 'City' }),
+		]);
+		const fixed = buildFixedResourceMapperFields(metadata, 'update', 'person');
+		expect(fixed.slice(0, 7).map(({ id }) => id)).toEqual([
+			'name__firstName',
+			'name__lastName',
+			'emails__primaryEmail',
+			'phones__primaryPhoneNumber',
+			'jobTitle',
+			'city',
+			'customValue',
+		]);
+		expect(fixed.slice(0, 6).every(({ removed }) => removed === false)).toBe(true);
+		expect(fixed.find(({ id }) => id === 'customValue')).toMatchObject({
+			removed: true,
+			required: false,
+		});
+
+		const missing = buildFixedResourceMapperFields(
+			object([
+				field({ apiName: 'name', label: 'Name', type: 'FULL_NAME' }),
+				field({ apiName: 'city', label: 'City' }),
+			]),
+			'create',
+			'person',
+		);
+		expect(missing.map(({ id }) => id)).toEqual(['name__firstName', 'name__lastName', 'city']);
+		expect(missing).not.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ id: 'emails__primaryEmail' }),
+				expect.objectContaining({ id: 'phones__primaryPhoneNumber' }),
+			]),
+		);
+	});
 	it('maps scalar, select, array, raw, relation, and future types deterministically', () => {
 		const fields = buildRecordMapperFields(
 			object([

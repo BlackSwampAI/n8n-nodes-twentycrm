@@ -53,12 +53,14 @@ describe('Twenty CRM Schema Object node', () => {
 		const resource = node.description.properties.find(({ name }) => name === 'resource');
 		expect(resource?.options).toEqual(
 			expect.arrayContaining([
+				expect.objectContaining({ value: 'company' }),
+				expect.objectContaining({ value: 'person' }),
 				expect.objectContaining({ value: 'record' }),
 				expect.objectContaining({ value: 'schemaObject' }),
 			]),
 		);
 		const operations = node.description.properties.filter(({ name }) => name === 'operation');
-		expect(operations).toHaveLength(2);
+		expect(operations).toHaveLength(3);
 		for (const resourceName of ['record', 'schemaObject']) {
 			const operation = operations.find(
 				(property) => property.displayOptions?.show?.resource?.[0] === resourceName,
@@ -78,6 +80,17 @@ describe('Twenty CRM Schema Object node', () => {
 				['create', 'delete', 'update'].map((value) => expect.objectContaining({ value })),
 			),
 		);
+		const fixedOperation = operations.find((property) =>
+			property.displayOptions?.show?.resource?.includes('company'),
+		);
+		expect(fixedOperation).toMatchObject({
+			displayOptions: { show: { resource: ['company', 'person'] } },
+			options: expect.arrayContaining(
+				['create', 'delete', 'get', 'getMany', 'update'].map((value) =>
+					expect.objectContaining({ value }),
+				),
+			),
+		});
 		const locators = node.description.properties.filter(({ name }) => name === 'objectApiName');
 		const recordLocator = locators.find(
 			(property) => property.displayOptions?.show?.resource?.[0] === 'record',
@@ -104,14 +117,23 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(recordId).toMatchObject({
 			type: 'string',
 			required: true,
-			displayOptions: { show: { resource: ['record'], operation: ['get', 'update', 'delete'] } },
+			displayOptions: {
+				show: {
+					resource: ['record', 'company', 'person'],
+					operation: ['get', 'update', 'delete'],
+				},
+			},
 		});
 		const jsonInput = node.description.properties.find(({ name }) => name === 'jsonInput');
 		expect(jsonInput).toMatchObject({
 			type: 'json',
 			required: true,
 			displayOptions: {
-				show: { resource: ['record'], operation: ['create', 'update'], inputMode: ['json'] },
+				show: {
+					resource: ['record', 'company', 'person'],
+					operation: ['create', 'update'],
+					inputMode: ['json'],
+				},
 			},
 		});
 		const inputMode = node.description.properties.find(({ name }) => name === 'inputMode');
@@ -181,44 +203,66 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(emptyFilter.results).toHaveLength(4);
 	});
 
-	it('loads create and update mapper schemas from the selected stable object API name', async () => {
-		const getObject = vi.fn().mockResolvedValue(
+	it('loads generic and fixed mapper schemas from stable object API names', async () => {
+		const field = {
+			id: 'field-name',
+			apiName: 'name',
+			label: 'Name',
+			type: 'TEXT',
+			isActive: true,
+			isCustom: true,
+			isNullable: false,
+			isUnique: false,
+			isRequired: true,
+			isReadOnly: false,
+			isSystem: false,
+			defaultValue: null,
+		};
+		const getObject = vi.fn().mockImplementation(async (apiName: string) =>
 			schemaObject({
-				fields: [
-					{
-						id: 'field-name',
-						apiName: 'name',
-						label: 'Name',
-						type: 'TEXT',
-						isActive: true,
-						isCustom: true,
-						isNullable: false,
-						isUnique: false,
-						isRequired: true,
-						isReadOnly: false,
-						isSystem: false,
-						defaultValue: null,
-					},
-				],
+				apiNameSingular: apiName,
+				fields: [apiName === 'person' ? { ...field, type: 'FULL_NAME' } : field],
 			}),
 		);
 		serviceMock.mockReturnValue({ getObject, getObjects: vi.fn() });
-		const getNodeParameter = vi.fn().mockReturnValue('vehicle');
-		const context = {
-			getNodeParameter,
+		const genericParameter = vi.fn((name: string) =>
+			name === 'resource' ? 'record' : name === 'objectApiName' ? 'vehicle' : undefined,
+		);
+		const genericContext = {
+			getNodeParameter: genericParameter,
 		} as unknown as ILoadOptionsFunctions;
-		const create = await new Twenty().methods.resourceMapping.getCreateFields.call(context);
-		const update = await new Twenty().methods.resourceMapping.getUpdateFields.call(context);
+		const create = await new Twenty().methods.resourceMapping.getCreateFields.call(genericContext);
+		const update = await new Twenty().methods.resourceMapping.getUpdateFields.call(genericContext);
 		expect(getObject).toHaveBeenCalledWith('vehicle');
-		expect(getNodeParameter).toHaveBeenCalledWith('objectApiName', undefined, {
+		expect(genericParameter).toHaveBeenCalledWith('objectApiName', undefined, {
 			extractValue: true,
 		});
-		expect(create.fields[0]).toMatchObject({ id: 'name', required: true });
+		expect(create.fields[0]).toMatchObject({ id: 'name', required: true, removed: false });
 		expect(update.fields[0]).toMatchObject({ id: 'name', required: false });
+
+		for (const [resource, method, id, required] of [
+			['company', 'getCreateFields', 'name', true],
+			['person', 'getUpdateFields', 'name__firstName', false],
+		] as const) {
+			const fixedParameter = vi.fn((name: string) => (name === 'resource' ? resource : undefined));
+			const result = await new Twenty().methods.resourceMapping[method].call({
+				getNodeParameter: fixedParameter,
+			} as unknown as ILoadOptionsFunctions);
+			expect(getObject).toHaveBeenCalledWith(resource);
+			expect(fixedParameter).not.toHaveBeenCalledWith(
+				'objectApiName',
+				expect.anything(),
+				expect.anything(),
+			);
+			expect(result.fields[0]).toMatchObject({ id, required, removed: false });
+		}
+
 		getObject.mockClear();
-		getNodeParameter.mockReturnValue('');
+		genericParameter.mockImplementation((name: string) =>
+			name === 'resource' ? 'record' : name === 'objectApiName' ? '' : undefined,
+		);
 		await expect(
-			new Twenty().methods.resourceMapping.getCreateFields.call(context),
+			new Twenty().methods.resourceMapping.getCreateFields.call(genericContext),
 		).resolves.toEqual({
 			fields: [],
 		});
@@ -312,6 +356,70 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(update).toHaveBeenCalledWith('vehicle', 'update-id', { name: 'kept' });
 		expect(remove).toHaveBeenCalledWith('vehicle', 'delete-id');
 		expect(result[0].map((item) => item.pairedItem)).toEqual([0, 1, 2, 3, 4]);
+	});
+
+	it('routes fixed Company and Person CRUD through the shared record service', async () => {
+		serviceMock.mockReturnValue({
+			getObject: vi.fn().mockResolvedValue(
+				schemaObject({
+					apiNameSingular: 'company',
+					fields: [
+						{
+							id: 'field-address',
+							apiName: 'address',
+							label: 'Address',
+							type: 'ADDRESS',
+							isActive: true,
+							isCustom: false,
+							isNullable: true,
+							isUnique: false,
+							isRequired: false,
+							isReadOnly: false,
+							isSystem: false,
+						},
+					],
+				}),
+			),
+			getObjects: vi.fn(),
+		});
+		const service = {
+			create: vi.fn().mockResolvedValue({ id: 'created' }),
+			get: vi.fn().mockResolvedValue({ id: 'got' }),
+			getMany: vi.fn().mockResolvedValue([{ id: 'listed' }]),
+			update: vi.fn().mockResolvedValue({ id: 'updated' }),
+			delete: vi.fn().mockResolvedValue({ success: true }),
+		};
+		recordServiceMock.mockReturnValue(service);
+		await Twenty.prototype.execute.call(
+			executeContext([
+				{ resource: 'company', operation: 'create', jsonInput: '{}' },
+				{ resource: 'person', operation: 'get', recordId: 'person-id' },
+				{ resource: 'company', operation: 'getMany', returnAll: false, limit: 2 },
+				{ resource: 'person', operation: 'update', recordId: 'person-id', jsonInput: '{}' },
+				{ resource: 'company', operation: 'delete', recordId: 'company-id' },
+				{
+					resource: 'company',
+					operation: 'create',
+					inputMode: 'fieldMapping',
+					createFields: {
+						mappingMode: 'defineBelow',
+						value: { address__addressCity: 'Synthetic City' },
+						matchingColumns: [],
+						schema: [],
+						attemptToConvertTypes: false,
+						convertFieldsToString: false,
+					},
+				},
+			]),
+		);
+		expect(service.create).toHaveBeenCalledWith('company', '{}');
+		expect(service.create).toHaveBeenCalledWith('company', {
+			address: { addressCity: 'Synthetic City' },
+		});
+		expect(service.get).toHaveBeenCalledWith('person', 'person-id');
+		expect(service.getMany).toHaveBeenCalledWith('company', expect.objectContaining({ limit: 2 }));
+		expect(service.update).toHaveBeenCalledWith('person', 'person-id', '{}');
+		expect(service.delete).toHaveBeenCalledWith('company', 'company-id');
 	});
 
 	it('reconstructs field-mapped Create and rejects stale mapped keys before mutation', async () => {

@@ -242,6 +242,14 @@ try {
 	const fetched = await lifecycleService.get('company', createdId);
 	if (fetched.name !== fixtureName)
 		throw new Error('Record Get did not verify the created fixture.');
+	const listed = await lifecycleService.getMany('company', {
+		returnAll: false,
+		limit: 1,
+		filter: `id[eq]:${JSON.stringify(createdId)}`,
+	});
+	if (listed.length !== 1 || listed[0]?.id !== createdId) {
+		throw new Error('Record Get Many did not verify the created fixture.');
+	}
 	const updatePayload = reconstructRecordPayload(
 		lifecycleObject,
 		mappedValue({
@@ -275,3 +283,113 @@ try {
 }
 if (lifecycleFailure) throw lifecycleFailure;
 console.log('Compiled Core REST Record Delete and absence qualification passed.');
+
+const personLifecycleService = createRecordService(liveContext, {
+	getObject: async () => recordObject,
+	getObjects: async () => [recordObject],
+});
+const personNameField = recordObject.fields.find(
+	(field) => field.type === 'FULL_NAME' && field.isActive && !field.isReadOnly && !field.isSystem,
+);
+if (!personNameField) throw new Error('Person mapping qualification field is unavailable.');
+const personFirstName = `n8n-pr10-${crypto.randomUUID()}`;
+const updatedPersonFirstName = `${personFirstName}-updated`;
+const personLastName = 'Fixture';
+let createdPersonId;
+
+async function findOwnedPersonRecords(firstName) {
+	const matches = await personLifecycleService.getMany('person', {
+		returnAll: false,
+		limit: 200,
+		filter: `${personNameField.apiName}.firstName[eq]:${JSON.stringify(firstName)}`,
+	});
+	if (
+		matches.some(
+			(record) =>
+				typeof record.id !== 'string' ||
+				record.id.length === 0 ||
+				record[personNameField.apiName]?.firstName !== firstName,
+		)
+	) {
+		throw new Error('Disposable Person cleanup lookup returned an unexpected shape.');
+	}
+	return matches;
+}
+
+async function cleanupOwnedPersonFixture() {
+	if (createdPersonId) {
+		try {
+			await personLifecycleService.delete('person', createdPersonId);
+		} catch {
+			// The bounded exact-name fallback below still attempts and verifies cleanup.
+		}
+	}
+	for (const firstName of [personFirstName, updatedPersonFirstName]) {
+		const matches = await findOwnedPersonRecords(firstName);
+		for (const match of matches) {
+			try {
+				await personLifecycleService.delete('person', match.id);
+			} catch {
+				// Absence verification determines whether cleanup ultimately succeeded.
+			}
+		}
+	}
+	for (const firstName of [personFirstName, updatedPersonFirstName]) {
+		if ((await findOwnedPersonRecords(firstName)).length !== 0) {
+			throw new Error('Disposable Person cleanup could not verify absence.');
+		}
+	}
+}
+
+let personLifecycleFailure;
+try {
+	const createPayload = reconstructRecordPayload(
+		recordObject,
+		mappedValue({
+			[`${personNameField.apiName}__firstName`]: personFirstName,
+			[`${personNameField.apiName}__lastName`]: personLastName,
+		}),
+	);
+	const created = await personLifecycleService.create('person', createPayload);
+	if (
+		typeof created.id !== 'string' ||
+		created.id.length === 0 ||
+		created[personNameField.apiName]?.firstName !== personFirstName
+	) {
+		throw new Error('Person Create returned an unexpected shape.');
+	}
+	createdPersonId = created.id;
+	const fetched = await personLifecycleService.get('person', createdPersonId);
+	if (fetched[personNameField.apiName]?.firstName !== personFirstName) {
+		throw new Error('Person Get did not verify the created fixture.');
+	}
+	const listed = await personLifecycleService.getMany('person', {
+		returnAll: false,
+		limit: 1,
+		filter: `id[eq]:${JSON.stringify(createdPersonId)}`,
+	});
+	if (listed.length !== 1 || listed[0]?.id !== createdPersonId) {
+		throw new Error('Person Get Many did not verify the created fixture.');
+	}
+	const updatePayload = reconstructRecordPayload(
+		recordObject,
+		mappedValue({
+			[`${personNameField.apiName}__firstName`]: updatedPersonFirstName,
+		}),
+	);
+	const updated = await personLifecycleService.update('person', createdPersonId, updatePayload);
+	if (updated[personNameField.apiName]?.firstName !== updatedPersonFirstName) {
+		throw new Error('Person Update returned an unexpected shape.');
+	}
+	console.log('Compiled fixed Person Create/Get/Get Many/Update qualification passed.');
+} catch (error) {
+	personLifecycleFailure = error;
+} finally {
+	try {
+		await cleanupOwnedPersonFixture();
+	} catch {
+		throw new Error('Disposable Person cleanup failed.');
+	}
+}
+if (personLifecycleFailure) throw personLifecycleFailure;
+console.log('Compiled fixed Person Delete and absence qualification passed.');

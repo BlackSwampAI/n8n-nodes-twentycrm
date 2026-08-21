@@ -70,12 +70,17 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain('__addressCity');
 		expect(liveTest).toContain('finally');
 		expect(liveTest).toContain('cleanupOwnedLifecycleFixture');
+		expect(liveTest).toContain('cleanupOwnedPersonFixture');
+		expect(liveTest).toContain(
+			'Compiled fixed Person Create/Get/Get Many/Update qualification passed.',
+		);
 		expect(liveTest).toContain('findOwnedLifecycleRecords');
 		expect(liveTest).toContain('name[eq]');
 		expect(liveTest).toContain('record.name !== name');
 		expect(liveTest).toContain("lifecycleService.delete('company', createdId)");
 		expect(liveTest).toContain("lifecycleService.delete('company', match.id)");
 		expect(liveTest).toContain('Disposable record cleanup could not verify absence.');
+		expect(liveTest).toContain('Disposable Person cleanup could not verify absence.');
 		expect(liveTest).toContain('crypto.randomUUID()');
 		expect(liveTest).toContain("filter: 'deletedAt[is]:NULL'");
 		expect(liveTest).toContain("orderBy: 'createdAt[AscNullsFirst]'");
