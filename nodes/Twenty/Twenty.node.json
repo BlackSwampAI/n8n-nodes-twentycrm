@@ -1,0 +1,13 @@
+{
+	"node": "@blackswampai/n8n-nodes-twentycrm.twenty",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Sales"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/BlackSwampAI/n8n-nodes-twentycrm#readme"
+			}
+		]
+	}
+}
