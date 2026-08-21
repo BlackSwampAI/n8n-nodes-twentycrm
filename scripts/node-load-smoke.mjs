@@ -12,6 +12,10 @@ const requestPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/re
 const { twentyApiRequest } = require(requestPath);
 const errorPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/errors.js');
 const { classifyTwentyError, createTwentyNodeApiError } = require(errorPath);
+const metadataPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/metadata.js');
+const { createObjectMetadataService, normalizeTwentyObject, OBJECT_METADATA_QUERY } = require(
+	metadataPath,
+);
 
 if (node.description.displayName !== 'Twenty CRM' || node.description.name !== 'twenty') {
 	throw new Error('Compiled Twenty CRM node identity did not load as expected');
@@ -24,7 +28,10 @@ if (
 	typeof node.methods?.credentialTest?.twentyApiCredentialTest !== 'function' ||
 	typeof twentyApiRequest !== 'function' ||
 	typeof classifyTwentyError !== 'function' ||
-	typeof createTwentyNodeApiError !== 'function'
+	typeof createTwentyNodeApiError !== 'function' ||
+	typeof createObjectMetadataService !== 'function' ||
+	typeof normalizeTwentyObject !== 'function' ||
+	!OBJECT_METADATA_QUERY.includes('objects(paging: { first: 1000')
 ) {
 	throw new Error('Compiled authenticated transport foundation did not load as expected');
 }

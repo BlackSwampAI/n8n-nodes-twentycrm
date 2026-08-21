@@ -28,7 +28,9 @@ Testing the credential sends a read-only Core GraphQL `__typename` query to vali
 
 ## Operations
 
-No operations are available yet. The current `Twenty CRM` node remains a non-networking shell that fails with a clear development-stage message if executed. Future operations will use one shared authenticated request path with sanitized status/network/GraphQL diagnostics and conservative retries: GET and HEAD retry transient failures automatically, other read-only requests require an explicit safe assertion, and all requests can disable retries. A request makes at most three total attempts and never exposes raw response or credential data through its terminal error. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
+The `Schema Object` resource provides read-only `Get` and `Get Many` operations backed by authenticated Metadata GraphQL discovery. `Get` saves the stable singular API name, while `Get Many` defaults to active, non-system objects and can optionally include inactive or system definitions. The same active, non-system discovery supplies the reusable object selector for standard and custom objects.
+
+Discovery uses one shared authenticated request path with sanitized status/network/GraphQL diagnostics and conservative retries. Metadata GraphQL POST requests are explicitly marked read-only and safe for retry, make at most three total attempts on transient failures, and never expose raw response or credential data through terminal errors. Record operations and schema mutations are not available yet. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
 
 ## Resources
 
