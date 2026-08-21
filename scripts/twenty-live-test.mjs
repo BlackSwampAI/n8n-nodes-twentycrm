@@ -18,7 +18,7 @@ const { deriveTwentyApiUrls } = require(resolve(root, 'dist/nodes/Twenty/shared/
 const { normalizeTwentyObject, OBJECT_METADATA_QUERY } = require(
 	resolve(root, 'dist/nodes/Twenty/shared/metadata.js'),
 );
-const { createRecordReadService } = require(resolve(root, 'dist/nodes/Twenty/shared/records.js'));
+const { createRecordService } = require(resolve(root, 'dist/nodes/Twenty/shared/records.js'));
 const baseUrl = `http://127.0.0.1:${env.TWENTY_PORT || '3020'}`;
 const urls = deriveTwentyApiUrls(baseUrl);
 const PROBE_TIMEOUT_MS = 15_000;
@@ -69,6 +69,7 @@ async function qualifyMetadataDiscovery() {
 	let after = null;
 	let hasQualifiedObject = false;
 	let recordObject;
+	let lifecycleObject;
 	for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
 		const data = await probe(
 			'Metadata discovery',
@@ -85,12 +86,13 @@ async function qualifyMetadataDiscovery() {
 			if (!object.isCustom && object.isActive && object.fields.length > 0)
 				hasQualifiedObject = true;
 			if (object.apiNameSingular === 'person') recordObject = object;
+			if (object.apiNameSingular === 'company') lifecycleObject = object;
 		}
 		if (!connection.pageInfo.hasNextPage) {
 			if (!hasQualifiedObject)
 				throw new Error('Metadata discovery did not return a usable standard object.');
 			console.log('Compiled metadata normalization qualification passed.');
-			return recordObject;
+			return { recordObject, lifecycleObject };
 		}
 		const nextCursor = connection.pageInfo.endCursor;
 		if (typeof nextCursor !== 'string' || nextCursor.length === 0 || cursors.has(nextCursor)) {
@@ -102,8 +104,9 @@ async function qualifyMetadataDiscovery() {
 	throw new Error('Metadata discovery pagination exceeded the safety limit.');
 }
 
-const recordObject = await qualifyMetadataDiscovery();
-if (!recordObject) throw new Error('Record qualification object is unavailable.');
+const { recordObject, lifecycleObject } = await qualifyMetadataDiscovery();
+if (!recordObject || !lifecycleObject)
+	throw new Error('Record qualification object is unavailable.');
 
 const liveContext = {
 	getCredentials: async () => ({ baseUrl }),
@@ -118,7 +121,11 @@ const liveContext = {
 			try {
 				response = await fetch(url, {
 					method: options.method,
-					headers: { Authorization: `Bearer ${apiKey}` },
+					headers: {
+						Authorization: `Bearer ${apiKey}`,
+						...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+					},
+					...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
 					signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
 				});
 			} catch {
@@ -129,7 +136,7 @@ const liveContext = {
 		},
 	},
 };
-const recordService = createRecordReadService(liveContext, {
+const recordService = createRecordService(liveContext, {
 	getObject: async () => recordObject,
 	getObjects: async () => [recordObject],
 });
@@ -144,3 +151,79 @@ if (records.length !== 1 || typeof records[0]?.id !== 'string') {
 }
 await recordService.get('person', records[0].id);
 console.log('Compiled Core REST Record Get/Get Many qualification passed.');
+
+const lifecycleService = createRecordService(liveContext, {
+	getObject: async () => lifecycleObject,
+	getObjects: async () => [lifecycleObject],
+});
+const fixtureName = `n8n-pr8-${crypto.randomUUID()}`;
+const updatedName = `${fixtureName}-updated`;
+let createdId;
+
+async function findOwnedLifecycleRecords(name) {
+	const matches = await lifecycleService.getMany('company', {
+		returnAll: false,
+		limit: 200,
+		filter: `name[eq]:${JSON.stringify(name)}`,
+	});
+	if (
+		matches.some(
+			(record) => typeof record.id !== 'string' || record.id.length === 0 || record.name !== name,
+		)
+	) {
+		throw new Error('Disposable record cleanup lookup returned an unexpected shape.');
+	}
+	return matches;
+}
+
+async function cleanupOwnedLifecycleFixture() {
+	if (createdId) {
+		try {
+			await lifecycleService.delete('company', createdId);
+		} catch {
+			// The bounded exact-name fallback below still attempts and verifies cleanup.
+		}
+	}
+	for (const name of [fixtureName, updatedName]) {
+		const matches = await findOwnedLifecycleRecords(name);
+		for (const match of matches) {
+			try {
+				await lifecycleService.delete('company', match.id);
+			} catch {
+				// Absence verification determines whether cleanup ultimately succeeded.
+			}
+		}
+	}
+	for (const name of [fixtureName, updatedName]) {
+		if ((await findOwnedLifecycleRecords(name)).length !== 0) {
+			throw new Error('Disposable record cleanup could not verify absence.');
+		}
+	}
+}
+
+let lifecycleFailure;
+try {
+	const created = await lifecycleService.create('company', { name: fixtureName });
+	if (typeof created.id !== 'string' || created.id.length === 0 || created.name !== fixtureName) {
+		throw new Error('Record Create returned an unexpected shape.');
+	}
+	createdId = created.id;
+	const fetched = await lifecycleService.get('company', createdId);
+	if (fetched.name !== fixtureName)
+		throw new Error('Record Get did not verify the created fixture.');
+	const updated = await lifecycleService.update('company', createdId, { name: updatedName });
+	if (updated.name !== updatedName) throw new Error('Record Update returned an unexpected shape.');
+	const verified = await lifecycleService.get('company', createdId);
+	if (verified.name !== updatedName) throw new Error('Record Get did not verify the update.');
+	console.log('Compiled Core REST Record Create/Get/Update qualification passed.');
+} catch (error) {
+	lifecycleFailure = error;
+} finally {
+	try {
+		await cleanupOwnedLifecycleFixture();
+	} catch {
+		throw new Error('Disposable record cleanup failed.');
+	}
+}
+if (lifecycleFailure) throw lifecycleFailure;
+console.log('Compiled Core REST Record Delete and absence qualification passed.');

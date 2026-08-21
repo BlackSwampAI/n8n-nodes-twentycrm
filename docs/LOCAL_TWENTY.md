@@ -37,7 +37,7 @@ Run the two independent read-only probes:
 npm run test:integration
 ```
 
-The test sends Bearer-authenticated GraphQL requests to `/graphql` and `/metadata`, then exercises the compiled generic Record read service against Core REST. Core GraphQL validates a bounded connection shape. Metadata GraphQL runs the compiled paginated discovery query and normalizer. Core REST performs one bounded filtered/ordered list read and one single-record read using only an identifier held in memory. Each request has a 15-second timeout. The test rejects HTTP, timeout/network, GraphQL, malformed-envelope, and cursor-loop errors and reports only the failing surface without printing names, identifiers, record values, counts, raw payloads, or the API key.
+The test sends Bearer-authenticated GraphQL requests to `/graphql` and `/metadata`, then exercises the compiled generic Record service against Core REST. Core GraphQL validates a bounded connection shape. Metadata GraphQL runs the compiled paginated discovery query and normalizer. Core REST performs bounded read qualification followed by a uniquely named disposable standard-object Create/Get/Update/Delete lifecycle. Cleanup runs in `finally`, and a successful run verifies the fixture is absent. Each request has a 15-second timeout. The test rejects HTTP, timeout/network, GraphQL, malformed-envelope, cursor-loop, and cleanup errors and reports only sanitized phases without printing names, identifiers, record values, counts, raw payloads, or the API key.
 
 Other lifecycle commands:
 

@@ -10,7 +10,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { twentyApiCredentialTest } from './shared/credentialTest';
 import { createObjectMetadataService } from './shared/metadata';
-import { createRecordReadService } from './shared/records';
+import { createRecordService } from './shared/records';
 
 export class Twenty implements INodeType {
 	description: INodeTypeDescription = {
@@ -67,12 +67,30 @@ export class Twenty implements INodeType {
 				noDataExpression: true,
 				displayOptions: { show: { resource: ['record'] } },
 				options: [
+					{
+						name: 'Create',
+						value: 'create',
+						description: 'Create a record',
+						action: 'Create a record',
+					},
+					{
+						name: 'Delete',
+						value: 'delete',
+						description: 'Delete a record',
+						action: 'Delete a record',
+					},
 					{ name: 'Get', value: 'get', description: 'Get a record', action: 'Get a record' },
 					{
 						name: 'Get Many',
 						value: 'getMany',
 						description: 'Get many records',
 						action: 'Get many records',
+					},
+					{
+						name: 'Update',
+						value: 'update',
+						description: 'Update a record',
+						action: 'Update a record',
 					},
 				],
 				default: 'getMany',
@@ -117,7 +135,16 @@ export class Twenty implements INodeType {
 				type: 'string',
 				default: '',
 				required: true,
-				displayOptions: { show: { resource: ['record'], operation: ['get'] } },
+				displayOptions: { show: { resource: ['record'], operation: ['get', 'update', 'delete'] } },
+			},
+			{
+				displayName: 'JSON Input',
+				name: 'jsonInput',
+				type: 'json',
+				default: '{}',
+				required: true,
+				description: 'Record fields as a JSON object',
+				displayOptions: { show: { resource: ['record'], operation: ['create', 'update'] } },
 			},
 			{
 				displayName: 'Return All',
@@ -208,7 +235,7 @@ export class Twenty implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const output: INodeExecutionData[] = [];
 		const metadataService = createObjectMetadataService(this);
-		const recordService = createRecordReadService(this, metadataService);
+		const recordService = createRecordService(this, metadataService);
 		for (let itemIndex = 0; itemIndex < this.getInputData().length; itemIndex++) {
 			const resource = this.getNodeParameter('resource', itemIndex) as string;
 			if (resource !== 'schemaObject' && resource !== 'record') {
@@ -217,7 +244,11 @@ export class Twenty implements INodeType {
 				});
 			}
 			const operation = this.getNodeParameter('operation', itemIndex) as string;
-			if (operation !== 'get' && operation !== 'getMany') {
+			const supportedOperation =
+				resource === 'schemaObject'
+					? operation === 'get' || operation === 'getMany'
+					: ['create', 'delete', 'get', 'getMany', 'update'].includes(operation);
+			if (!supportedOperation) {
 				throw new NodeOperationError(this.getNode(), 'Unsupported Twenty CRM operation.', {
 					itemIndex,
 				});
@@ -226,8 +257,31 @@ export class Twenty implements INodeType {
 				const objectApiName = this.getNodeParameter('objectApiName', itemIndex, '', {
 					extractValue: true,
 				}) as string;
-				if (operation === 'get') {
+				if (operation === 'create') {
+					const input = this.getNodeParameter('jsonInput', itemIndex);
+					output.push({
+						json: { ...(await recordService.create(objectApiName, input)) },
+						pairedItem: itemIndex,
+					});
+					continue;
+				}
+				if (operation === 'get' || operation === 'update' || operation === 'delete') {
 					const recordId = this.getNodeParameter('recordId', itemIndex) as string;
+					if (operation === 'update') {
+						const input = this.getNodeParameter('jsonInput', itemIndex);
+						output.push({
+							json: { ...(await recordService.update(objectApiName, recordId, input)) },
+							pairedItem: itemIndex,
+						});
+						continue;
+					}
+					if (operation === 'delete') {
+						output.push({
+							json: { ...(await recordService.delete(objectApiName, recordId)) },
+							pairedItem: itemIndex,
+						});
+						continue;
+					}
 					output.push({
 						json: { ...(await recordService.get(objectApiName, recordId)) },
 						pairedItem: itemIndex,

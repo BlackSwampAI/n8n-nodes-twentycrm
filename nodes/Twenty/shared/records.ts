@@ -1,24 +1,17 @@
 import type { IDataObject, IExecuteFunctions } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-import type { NormalizedObjectDefinition, ObjectMetadataService, TwentyRecord } from './contracts';
+import type {
+	NormalizedObjectDefinition,
+	ObjectMetadataService,
+	RecordService,
+	TwentyRecord,
+} from './contracts';
 import { createObjectMetadataService } from './metadata';
 import { twentyApiRequest } from './request';
 
 const MAX_PAGE_SIZE = 200;
 const MAX_PAGES = 1000;
-
-export interface RecordGetManyOptions {
-	returnAll: boolean;
-	limit?: number;
-	filter?: string;
-	orderBy?: string;
-}
-
-export interface RecordReadService {
-	get(objectApiName: string, recordId: string): Promise<TwentyRecord>;
-	getMany(objectApiName: string, options: RecordGetManyOptions): Promise<TwentyRecord[]>;
-}
 
 export class TwentyRecordResponseError extends Error {
 	constructor(message: string) {
@@ -54,8 +47,29 @@ function assertSupportedObject(object: NormalizedObjectDefinition): void {
 	}
 }
 
+function assertWritableObject(object: NormalizedObjectDefinition): void {
+	if (object.isReadOnly) {
+		throw new TwentyRecordResponseError(
+			'The selected Twenty object is read-only and cannot be changed. Choose a writable workspace object.',
+		);
+	}
+}
+
 function parseSingle(response: unknown, apiName: string): TwentyRecord {
 	const value = record(record(response)?.data)?.[apiName];
+	if (!record(value)) {
+		throw new TwentyRecordResponseError('Twenty returned an invalid record response.');
+	}
+	return value as TwentyRecord;
+}
+
+function parseMutation(
+	response: unknown,
+	operation: 'create' | 'update',
+	apiName: string,
+): TwentyRecord {
+	const responseName = `${operation}${apiName.charAt(0).toUpperCase()}${apiName.slice(1)}`;
+	const value = record(record(response)?.data)?.[responseName];
 	if (!record(value)) {
 		throw new TwentyRecordResponseError('Twenty returned an invalid record response.');
 	}
@@ -94,14 +108,30 @@ function cleanQueryValue(value: string | undefined): string | undefined {
 	return trimmed ? trimmed : undefined;
 }
 
-export function createRecordReadService(
+function normalizeRecordInput(value: unknown): IDataObject | undefined {
+	let parsed = value;
+	if (typeof value === 'string') {
+		try {
+			parsed = JSON.parse(value) as unknown;
+		} catch {
+			return undefined;
+		}
+	}
+	return record(parsed) ? (parsed as IDataObject) : undefined;
+}
+
+export function createRecordService(
 	context: IExecuteFunctions,
 	metadata: ObjectMetadataService = createObjectMetadataService(context),
-): RecordReadService {
-	async function objectFor(apiName: string): Promise<NormalizedObjectDefinition> {
+): RecordService {
+	async function objectFor(
+		apiName: string,
+		options: { requireWritable?: boolean } = {},
+	): Promise<NormalizedObjectDefinition> {
 		const object = await metadata.getObject(apiName);
 		try {
 			assertSupportedObject(object);
+			if (options.requireWritable) assertWritableObject(object);
 			return object;
 		} catch (error) {
 			if (error instanceof TwentyRecordResponseError) {
@@ -128,7 +158,52 @@ export function createRecordReadService(
 		}
 	}
 
+	function safeInput(value: unknown): IDataObject {
+		const input = normalizeRecordInput(value);
+		if (!input) {
+			throw new NodeOperationError(
+				context.getNode(),
+				'Record JSON input must be a valid non-null JSON object.',
+			);
+		}
+		return input;
+	}
+
 	return {
+		async create(objectApiName, input) {
+			const body = safeInput(input);
+			const object = await objectFor(objectApiName, { requireWritable: true });
+			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}`;
+			const response = await twentyApiRequest(context, {
+				method: 'POST',
+				surface: 'coreRest',
+				path,
+				body,
+			});
+			return safeResponse(() => parseMutation(response, 'create', object.apiNameSingular));
+		},
+		async update(objectApiName, recordId, input) {
+			const body = safeInput(input);
+			const object = await objectFor(objectApiName, { requireWritable: true });
+			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}/${safeResponse(() => safeSegment(recordId, 'record identifier'))}`;
+			const response = await twentyApiRequest(context, {
+				method: 'PATCH',
+				surface: 'coreRest',
+				path,
+				body,
+			});
+			return safeResponse(() => parseMutation(response, 'update', object.apiNameSingular));
+		},
+		async delete(objectApiName, recordId) {
+			const object = await objectFor(objectApiName, { requireWritable: true });
+			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}/${safeResponse(() => safeSegment(recordId, 'record identifier'))}`;
+			await twentyApiRequest(context, {
+				method: 'DELETE',
+				surface: 'coreRest',
+				path,
+			});
+			return { success: true, recordId, objectApiName: object.apiNameSingular };
+		},
 		async get(objectApiName, recordId) {
 			const object = await objectFor(objectApiName);
 			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}/${safeResponse(() => safeSegment(recordId, 'record identifier'))}`;
