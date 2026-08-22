@@ -31,6 +31,8 @@ Open `http://localhost:3020`, complete Twenty's normal browser onboarding, then 
 4. Copy the key when Twenty displays it; it is shown once.
 5. Add it to the ignored `integration/twenty/.env` as `TWENTY_API_KEY=...` using a text editor. Do not place the key in a shell command, commit, issue, or log.
 
+The built-in lifecycle needs the corresponding object read/write permissions. The custom object/field qualification also needs the API-key role's **Data Model** settings permission. Use a disposable local role and do not grant this permission to a production key merely to run the harness.
+
 Run the integration qualification:
 
 ```sh
@@ -71,7 +73,7 @@ npm run test:webhook-bridge
 
 The command accepts only an explicit-port `http://localhost/...` or `http://127.0.0.1/...` production webhook path, never a remote host or test-webhook URL. It checks TCP reachability from the actual Twenty worker with bounded timeouts and prints no URL, path, credentials, or payloads.
 
-For Twenty's webhook form, replace only the displayed URL's host: `http://localhost:5678/webhook/...` becomes `http://host.docker.internal:5678/webhook/...`. Enter a strong shared secret despite Twenty labeling it optional, and save the same value in n8n's password-masked Twenty Webhook API credential. Activate the n8n workflow, create the webhook manually in Twenty, then create or update a uniquely owned disposable local record to prove native delivery. Confirm the matching n8n production execution in the UI and remove the disposable record/webhook afterward. The harness does not automate this boundary because doing so would require private webhook-management or n8n execution APIs.
+For Twenty's webhook form, replace only the displayed URL's host: `http://localhost:5678/webhook/...` becomes `http://host.docker.internal:5678/webhook/...`. Enter a strong shared secret despite Twenty labeling it optional, and save the same value in n8n's password-masked Twenty Webhook API credential. Activate the n8n workflow, create the webhook manually in Twenty, then create or update a uniquely owned disposable local record to prove native delivery. Confirm the matching n8n production execution in the UI and remove the disposable record/webhook afterward. This native signed-delivery path has passed against the pinned stack; registration remains manual because the project does not use private webhook-management or n8n execution APIs.
 
 ## Failure logs
 

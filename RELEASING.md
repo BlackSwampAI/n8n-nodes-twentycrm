@@ -16,10 +16,11 @@ npm run build
 npm run release:check
 npm run package:check
 npm run smoke:load
+npm run smoke:install
 git diff --check
 ```
 
-Feature milestones may also require real Twenty integration and n8n UI qualification. The foundation milestone does not because it intentionally has no API or usable operations.
+`smoke:install` packs the exact release candidate, installs that tarball into an isolated temporary consumer without installing the host-provided `n8n-workflow` peer, and loads both nodes and credentials from the installed package. Feature milestones may also require the pinned Twenty integration harness and the bounded n8n UI qualification checklist; those live checks remain explicit rather than ordinary CI steps.
 
 ## First publication
 

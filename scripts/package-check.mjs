@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -58,6 +60,8 @@ const expectedFiles = [
 ].sort();
 const missing = expectedFiles.filter((path) => !files.includes(path));
 const unexpected = files.filter((path) => !expectedFiles.includes(path));
+const expectedIconHash = '0016254102d200b1598b4c1ecb88dfa398ec3a34db0616ed9441eda887ff2fef';
+const iconPaths = ['dist/nodes/Twenty/twenty.svg', 'dist/nodes/Twenty/twenty.dark.svg'];
 
 if (missing.length > 0 || unexpected.length > 0) {
 	console.error('npm package contents do not match the expected artifact set.');
@@ -68,6 +72,18 @@ if (missing.length > 0 || unexpected.length > 0) {
 		console.error(`Unexpected files:\n${unexpected.map((path) => `- ${path}`).join('\n')}`);
 	}
 	process.exit(1);
+}
+
+for (const path of iconPaths) {
+	const hash = createHash('sha256')
+		.update(readFileSync(resolve(root, path)))
+		.digest('hex');
+	if (hash !== expectedIconHash) {
+		console.error(
+			`Packaged official Twenty icon does not match the pinned upstream asset: ${path}`,
+		);
+		process.exit(1);
+	}
 }
 
 console.log(`Exact package artifact set passed (${files.length} files)`);

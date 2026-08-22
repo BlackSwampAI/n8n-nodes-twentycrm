@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import { isValidN8nPackageName } from './package-name.mjs';
@@ -21,7 +22,10 @@ function hasPlaceholder(value) {
 
 const packageJson = JSON.parse(read('package.json'));
 const publishWorkflow = read('.github/workflows/publish.yml');
+const ciWorkflow = read('.github/workflows/ci.yml');
+const releasing = read('RELEASING.md');
 const readme = read('README.md');
+const officialIconHash = '0016254102d200b1598b4c1ecb88dfa398ec3a34db0616ed9441eda887ff2fef';
 
 if (!isValidN8nPackageName(packageJson.name ?? '')) {
 	fail(
@@ -84,6 +88,15 @@ if (packageJson.scripts?.release !== 'n8n-node release')
 if (packageJson.scripts?.prepublishOnly !== 'n8n-node prerelease') {
 	fail('prepublishOnly must use the n8n-node prerelease guard');
 }
+if (packageJson.scripts?.['smoke:install'] !== 'node scripts/package-install-smoke.mjs') {
+	fail('smoke:install must run the isolated packed-package install/load audit');
+}
+if (!ciWorkflow.includes('- run: npm run smoke:install')) {
+	fail('CI must run the isolated packed-package install/load audit');
+}
+if (!releasing.includes('npm run smoke:install')) {
+	fail('RELEASING.md must include the isolated packed-package install/load audit');
+}
 
 if (!publishWorkflow.includes("- 'v*.*.*'"))
 	fail('publish workflow must trigger on v-prefixed version tags');
@@ -103,6 +116,21 @@ for (const heading of [
 	if (!readme.includes(heading)) fail(`README is missing ${heading}`);
 }
 if (hasPlaceholder(readme)) fail('README still contains a placeholder');
+for (const statement of [
+	'unofficial Black Swamp AI community integration',
+	'not affiliated with, sponsored by, or endorsed by Twenty.com, PBC',
+	'1642be86f5c17217372366b9e2a950ebf88a53db',
+]) {
+	if (!readme.includes(statement)) fail(`README is missing required notice: ${statement}`);
+}
+if (/does not provide API operations|no live installation has been qualified/i.test(readme)) {
+	fail('README contains a stale foundation or qualification claim');
+}
+
+for (const path of ['nodes/Twenty/twenty.svg', 'nodes/Twenty/twenty.dark.svg']) {
+	const hash = createHash('sha256').update(read(path)).digest('hex');
+	if (hash !== officialIconHash) fail(`${path} must match the pinned official upstream asset`);
+}
 
 for (const path of ['LICENSE.md', 'CHANGELOG.md', 'RELEASING.md']) {
 	if (!existsSync(resolve(root, path))) fail(`${path} is required`);
