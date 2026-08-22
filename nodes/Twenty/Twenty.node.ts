@@ -8,7 +8,7 @@ import type {
 	ResourceMapperFields,
 	ResourceMapperValue,
 } from 'n8n-workflow';
-import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { twentyApiCredentialTest } from './shared/credentialTest';
 import {
@@ -505,6 +505,8 @@ export class Twenty implements INodeType {
 				if (error instanceof TwentyFieldMappingError) {
 					throw new NodeOperationError(this.getNode(), error.message, { itemIndex });
 				}
+				// eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- This is already a sanitized NodeApiError and must retain its safe message, description, and identity.
+				if (error instanceof NodeApiError) throw error;
 				throw new NodeOperationError(
 					this.getNode(),
 					'Unable to prepare the Twenty record field mapping.',

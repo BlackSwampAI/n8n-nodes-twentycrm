@@ -1,4 +1,4 @@
-import type { IExecuteFunctions, ILoadOptionsFunctions } from 'n8n-workflow';
+import { NodeApiError, type IExecuteFunctions, type ILoadOptionsFunctions } from 'n8n-workflow';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Twenty } from './Twenty.node';
@@ -741,6 +741,89 @@ describe('Twenty CRM Schema Object node', () => {
 			),
 		).rejects.toThrow('unknown or stale field');
 		expect(create).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		{
+			label: 'fixed resource',
+			parameters: {
+				resource: 'company',
+				operation: 'create',
+				inputMode: 'fieldMapping',
+				createCommonFields: { value: {} },
+				createAdditionalFields: { value: {} },
+			},
+		},
+		{
+			label: 'generic Record',
+			parameters: {
+				resource: 'record',
+				operation: 'create',
+				objectApiName: 'vehicle',
+				inputMode: 'fieldMapping',
+				createFields: { value: {} },
+			},
+		},
+	])('preserves sanitized connectivity errors for $label field mapping', async ({ parameters }) => {
+		const connectivityError = new NodeApiError(
+			executeContext([]).getNode(),
+			{},
+			{
+				message: 'Unable to reach the Twenty API',
+				description:
+					'Check the Base URL, DNS, TLS certificate, and network access to the self-hosted or Twenty Cloud instance.',
+			},
+		);
+		serviceMock.mockReturnValue({
+			getObject: vi.fn().mockRejectedValue(connectivityError),
+			getObjects: vi.fn(),
+		});
+		recordServiceMock.mockReturnValue({
+			create: vi.fn(),
+			get: vi.fn(),
+			getMany: vi.fn(),
+			update: vi.fn(),
+			delete: vi.fn(),
+		});
+
+		const thrown = await Twenty.prototype.execute
+			.call(executeContext([parameters]))
+			.catch((error: unknown) => error);
+
+		expect(thrown).toBe(connectivityError);
+		expect((thrown as NodeApiError).message).toBe('Unable to reach the Twenty API');
+		expect((thrown as NodeApiError).description).toBe(
+			'Check the Base URL, DNS, TLS certificate, and network access to the self-hosted or Twenty Cloud instance.',
+		);
+	});
+
+	it('sanitizes unexpected field-mapping preparation errors', async () => {
+		serviceMock.mockReturnValue({
+			getObject: vi.fn().mockRejectedValue(new Error('private upstream detail')),
+			getObjects: vi.fn(),
+		});
+		recordServiceMock.mockReturnValue({
+			create: vi.fn(),
+			get: vi.fn(),
+			getMany: vi.fn(),
+			update: vi.fn(),
+			delete: vi.fn(),
+		});
+
+		const execution = Twenty.prototype.execute.call(
+			executeContext([
+				{
+					resource: 'record',
+					operation: 'create',
+					objectApiName: 'vehicle',
+					inputMode: 'fieldMapping',
+					createFields: { value: {} },
+				},
+			]),
+		);
+
+		await expect(execution).rejects.toThrow('Unable to prepare the Twenty record field mapping.');
+		await expect(execution).rejects.not.toThrow('private upstream detail');
 	});
 
 	it('routes mapped Opportunity relation IDs through the shared service', async () => {
