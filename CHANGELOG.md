@@ -2,6 +2,14 @@
 
 ## Unreleased
 
-- Replace the starter template with the Twenty CRM project foundation.
-- Adopt the scoped npm identity `@blackswampai/n8n-nodes-twentycrm`.
-- Add a non-networking Twenty CRM node shell, shared type contracts, tests, package checks, and CI gates.
+- No changes yet.
+
+## 0.1.0
+
+- Add Twenty API credentials with Twenty Cloud and self-hosted root URL support, authenticated transport, safe diagnostics, and conservative retries.
+- Add metadata-driven Schema Object discovery and generic Record Create, Get, Get Many, Update, and Delete for active standard and custom objects.
+- Add friendly Company, Person, Opportunity, Task, and Note CRUD resources with schema-aware field mapping, compound-field adapters, JSON fallback, and verified direct relation IDs.
+- Add the manually registered Twenty CRM Trigger for signed record-created, record-updated, and record-deleted events with object/event filtering and bounded timestamp validation.
+- Add pinned Twenty v2.9.0 self-hosted qualification covering built-in resources, disposable custom schema/record lifecycles, and native signed webhook delivery.
+- Add exact package artifact, compiled load, and isolated packed-install checks across the release and CI gates.
+- Use pinned official Twenty icon artwork with clear independent, unofficial, non-affiliation, and trademark notices.

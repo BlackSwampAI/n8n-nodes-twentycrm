@@ -8,7 +8,7 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
-import { twentyApiCredentialTest } from './shared/credentialTest';
+import { twentyApiCredentialTest, twentyWebhookCredentialTest } from './shared/credentialTest';
 import { createObjectMetadataService } from './shared/metadata';
 import { parseTwentyWebhookEvent, TwentyWebhookError, verifyTwentyWebhook } from './shared/webhook';
 
@@ -29,7 +29,7 @@ export class TwentyTrigger implements INodeType {
 		outputs: [NodeConnectionTypes.Main],
 		credentials: [
 			{ name: 'twentyApi', required: true, testedBy: 'twentyApiCredentialTest' },
-			{ name: 'twentyWebhookApi', required: true },
+			{ name: 'twentyWebhookApi', required: true, testedBy: 'twentyWebhookCredentialTest' },
 		],
 		webhooks: [
 			{
@@ -71,7 +71,7 @@ export class TwentyTrigger implements INodeType {
 	};
 
 	methods = {
-		credentialTest: { twentyApiCredentialTest },
+		credentialTest: { twentyApiCredentialTest, twentyWebhookCredentialTest },
 		loadOptions: {
 			async getTriggerObjects(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				const objects = await createObjectMetadataService(this).getObjects();
