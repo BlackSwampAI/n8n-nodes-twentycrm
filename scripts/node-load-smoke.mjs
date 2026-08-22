@@ -57,6 +57,10 @@ for (const description of [node.description, trigger.description]) {
 if (
 	node.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest' ||
 	typeof node.methods?.credentialTest?.twentyApiCredentialTest !== 'function' ||
+	trigger.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest' ||
+	trigger.description.credentials?.[1]?.testedBy !== 'twentyWebhookCredentialTest' ||
+	typeof trigger.methods?.credentialTest?.twentyApiCredentialTest !== 'function' ||
+	typeof trigger.methods?.credentialTest?.twentyWebhookCredentialTest !== 'function' ||
 	typeof twentyApiRequest !== 'function' ||
 	typeof classifyTwentyError !== 'function' ||
 	typeof createTwentyNodeApiError !== 'function' ||

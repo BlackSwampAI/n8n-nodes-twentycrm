@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import { isValidN8nPackageName } from './package-name.mjs';
+import { githubTagFailure } from './release-check-lib.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const failures = [];
@@ -25,6 +26,9 @@ const publishWorkflow = read('.github/workflows/publish.yml');
 const ciWorkflow = read('.github/workflows/ci.yml');
 const releasing = read('RELEASING.md');
 const readme = read('README.md');
+const changelog = read('CHANGELOG.md');
+const webhookCredentialSource = read('credentials/TwentyWebhookApi.credentials.ts');
+const nodeLoadSmoke = read('scripts/node-load-smoke.mjs');
 const officialIconHash = '0016254102d200b1598b4c1ecb88dfa398ec3a34db0616ed9441eda887ff2fef';
 
 if (!isValidN8nPackageName(packageJson.name ?? '')) {
@@ -35,6 +39,12 @@ if (!isValidN8nPackageName(packageJson.name ?? '')) {
 
 if (packageJson.name !== '@blackswampai/n8n-nodes-twentycrm') {
 	fail('package.json name must match the approved @blackswampai/n8n-nodes-twentycrm identity');
+}
+if (packageJson.version !== '0.1.0') {
+	fail('package.json version must remain exactly 0.1.0 for the first release');
+}
+if (!/^## 0\.1\.0$/m.test(changelog)) {
+	fail('CHANGELOG.md must contain a real 0.1.0 release entry');
 }
 
 for (const [label, value] of [
@@ -100,11 +110,55 @@ if (!releasing.includes('npm run smoke:install')) {
 
 if (!publishWorkflow.includes("- 'v*.*.*'"))
 	fail('publish workflow must trigger on v-prefixed version tags');
+if (!publishWorkflow.includes('runs-on: ubuntu-latest'))
+	fail('publish workflow must use a GitHub-hosted Ubuntu runner');
+if (!/contents:\s*read/.test(publishWorkflow)) fail('publish workflow needs contents: read');
 if (!/id-token:\s*write/.test(publishWorkflow)) fail('publish workflow needs id-token: write');
-if (!publishWorkflow.includes('npm run release')) fail('publish workflow must run npm run release');
-if (!publishWorkflow.includes('secrets.NPM_TOKEN')) {
-	fail('publish workflow must retain the first-publication NPM_TOKEN fallback');
+if (/contents:\s*write/.test(publishWorkflow))
+	fail('publish workflow must not grant contents: write');
+for (const statement of [
+	"node-version: '24'",
+	"registry-url: 'https://registry.npmjs.org'",
+	'package-manager-cache: false',
+	'run: node scripts/verify-npm-version.mjs',
+	'run: npm ci',
+]) {
+	if (!publishWorkflow.includes(statement))
+		fail(`publish workflow is missing required setup: ${statement}`);
 }
+const publishCommands = [
+	'npm run format:check',
+	'npm run lint',
+	'npm run typecheck',
+	'npm test',
+	'npm run build',
+	'npm run release:check',
+	'npm run package:check',
+	'npm run smoke:load',
+	'npm run smoke:install',
+	'npm run release',
+];
+const workflowRunCommands = [...publishWorkflow.matchAll(/^\s*(?:-\s*)?run:\s*(.+)$/gm)].map(
+	(match) => match[1].trim(),
+);
+let previousCommandIndex = -1;
+for (const command of publishCommands) {
+	const commandIndex = workflowRunCommands.indexOf(command, previousCommandIndex + 1);
+	if (commandIndex < 0) fail(`publish workflow is missing required ordered command: ${command}`);
+	previousCommandIndex = commandIndex;
+}
+if (workflowRunCommands.filter((command) => command === 'npm run release').length !== 1) {
+	fail('publish workflow must run npm run release exactly once');
+}
+if (!publishWorkflow.includes('NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}')) {
+	fail('publish workflow must map the bootstrap NPM_TOKEN secret directly to NODE_AUTH_TOKEN');
+}
+if (/npm config|_authToken|echo[^\n]*NPM_TOKEN|run:\s*\|/.test(publishWorkflow)) {
+	fail('publish workflow must not materialize the npm token through shell or npm configuration');
+}
+
+const tagFailure = githubTagFailure(packageJson.version);
+if (tagFailure) fail(tagFailure);
 
 for (const heading of [
 	'## Installation',
@@ -125,6 +179,18 @@ for (const statement of [
 }
 if (/does not provide API operations|no live installation has been qualified/i.test(readme)) {
 	fail('README contains a stale foundation or qualification claim');
+}
+if (webhookCredentialSource.includes('credential-test-required')) {
+	fail('Twenty Webhook API credential must not suppress the credential-test-required rule');
+}
+for (const statement of [
+	"trigger.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest'",
+	"trigger.description.credentials?.[1]?.testedBy !== 'twentyWebhookCredentialTest'",
+	"typeof trigger.methods?.credentialTest?.twentyApiCredentialTest !== 'function'",
+	"typeof trigger.methods?.credentialTest?.twentyWebhookCredentialTest !== 'function'",
+]) {
+	if (!nodeLoadSmoke.includes(statement))
+		fail(`compiled load smoke is missing credential-test invariant: ${statement}`);
 }
 
 for (const path of ['nodes/Twenty/twenty.svg', 'nodes/Twenty/twenty.dark.svg']) {

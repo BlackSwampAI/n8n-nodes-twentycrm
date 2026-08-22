@@ -26,7 +26,7 @@ This is not a broad Twenty or n8n version matrix, and the package is not yet n8n
 
 The credential test sends a minimal read-only Core GraphQL query. The API-key role needs access to every object used by a workflow. Dynamic schema discovery needs metadata access; the local custom-schema qualification additionally requires the **Data Model** settings permission.
 
-`Twenty Webhook API` stores the shared webhook secret as a password-masked value. Enter the same strong secret in Twenty's webhook form even though Twenty labels it optional. Unsigned trigger delivery is not supported.
+`Twenty Webhook API` stores the shared webhook secret as a password-masked value. Its credential test confirms only that a non-empty secret is configured; verify signed delivery by sending a Twenty event. Enter the same strong secret in Twenty's webhook form even though Twenty labels it optional. Unsigned trigger delivery is not supported.
 
 Never place API keys or webhook secrets in workflow fields, source code, logs, or issue reports.
 

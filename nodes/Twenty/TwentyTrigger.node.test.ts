@@ -46,7 +46,10 @@ describe('Twenty CRM Trigger node', () => {
 			name: 'twentyTrigger',
 			group: ['trigger'],
 			inputs: [],
-			credentials: [{ name: 'twentyApi' }, { name: 'twentyWebhookApi' }],
+			credentials: [
+				{ name: 'twentyApi', testedBy: 'twentyApiCredentialTest' },
+				{ name: 'twentyWebhookApi', testedBy: 'twentyWebhookCredentialTest' },
+			],
 			webhooks: [{ httpMethod: 'POST', responseMode: 'onReceived' }],
 		});
 		const event = node.description.properties.find(({ name }) => name === 'event');
@@ -60,6 +63,10 @@ describe('Twenty CRM Trigger node', () => {
 		);
 		expect(notice?.displayName).toContain('even though Twenty labels it optional');
 		expect(notice?.displayName).toContain('requires signed deliveries');
+		expect(node.methods.credentialTest).toMatchObject({
+			twentyApiCredentialTest: expect.any(Function),
+			twentyWebhookCredentialTest: expect.any(Function),
+		});
 	});
 
 	it('loads active standard and custom objects with All Objects first', async () => {
