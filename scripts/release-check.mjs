@@ -22,6 +22,7 @@ function hasPlaceholder(value) {
 }
 
 const packageJson = JSON.parse(read('package.json'));
+const packageLock = JSON.parse(read('package-lock.json'));
 const publishWorkflow = read('.github/workflows/publish.yml');
 const ciWorkflow = read('.github/workflows/ci.yml');
 const releasing = read('RELEASING.md');
@@ -40,11 +41,17 @@ if (!isValidN8nPackageName(packageJson.name ?? '')) {
 if (packageJson.name !== '@blackswampai/n8n-nodes-twentycrm') {
 	fail('package.json name must match the approved @blackswampai/n8n-nodes-twentycrm identity');
 }
-if (packageJson.version !== '0.1.0') {
-	fail('package.json version must remain exactly 0.1.0 for the first release');
+if (packageJson.version !== '0.1.1') {
+	fail('package.json version must be exactly 0.1.1 for this release candidate');
 }
-if (!/^## 0\.1\.0$/m.test(changelog)) {
-	fail('CHANGELOG.md must contain a real 0.1.0 release entry');
+if (!/^## 0\.1\.1$/m.test(changelog)) {
+	fail('CHANGELOG.md must contain a real 0.1.1 release entry');
+}
+if (
+	packageLock.version !== packageJson.version ||
+	packageLock.packages?.['']?.version !== packageJson.version
+) {
+	fail('package.json and package-lock.json versions must agree');
 }
 
 for (const [label, value] of [
@@ -57,6 +64,9 @@ for (const [label, value] of [
 ]) {
 	if (!value || hasPlaceholder(value))
 		fail(`package.json ${label} is missing or still a placeholder`);
+}
+if (packageJson.homepage !== 'https://blackswampai.com/n8n-nodes/twenty-crm/') {
+	fail('package.json homepage must be the Black Swamp AI Twenty CRM integration page');
 }
 
 if (packageJson.private === true) fail('package.json must not be private');
@@ -179,6 +189,20 @@ for (const statement of [
 }
 if (/does not provide API operations|no live installation has been qualified/i.test(readme)) {
 	fail('README contains a stale foundation or qualification claim');
+}
+for (const statement of [
+	'# @blackswampai/n8n-nodes-twentycrm',
+	'https://img.shields.io/npm/v/%40blackswampai%2Fn8n-nodes-twentycrm',
+	'https://github.com/BlackSwampAI/n8n-nodes-twentycrm/actions/workflows/ci.yml/badge.svg',
+	'https://blackswampai.com/n8n-nodes/twenty-crm/',
+	'[SLSA provenance attestation](https://slsa.dev/provenance/v1)',
+	'traces the package to the repository and commit it was built from',
+	'npm view @blackswampai/n8n-nodes-twentycrm dist.attestations',
+]) {
+	if (!readme.includes(statement)) fail(`README is missing package presentation: ${statement}`);
+}
+if (/under active development|has not been published|after publication/i.test(readme)) {
+	fail('README contains stale unpublished-package language');
 }
 if (webhookCredentialSource.includes('credential-test-required')) {
 	fail('Twenty Webhook API credential must not suppress the credential-test-required rule');

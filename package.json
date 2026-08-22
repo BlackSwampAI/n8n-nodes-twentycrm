@@ -1,9 +1,9 @@
 {
 	"name": "@blackswampai/n8n-nodes-twentycrm",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "n8n community integration for Twenty CRM",
 	"license": "MIT",
-	"homepage": "https://github.com/BlackSwampAI/n8n-nodes-twentycrm#readme",
+	"homepage": "https://blackswampai.com/n8n-nodes/twenty-crm/",
 	"keywords": [
 		"n8n-community-node-package",
 		"n8n",

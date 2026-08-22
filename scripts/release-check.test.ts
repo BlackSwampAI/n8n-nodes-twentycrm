@@ -23,11 +23,11 @@ describe('release audit', () => {
 	});
 
 	it('accepts ordinary local context and the exact package-version tag', () => {
-		expect(githubTagFailure('0.1.0', {})).toBeUndefined();
+		expect(githubTagFailure('0.1.1', {})).toBeUndefined();
 		expect(
-			githubTagFailure('0.1.0', {
-				GITHUB_REF: 'refs/tags/v0.1.0',
-				GITHUB_REF_NAME: 'v0.1.0',
+			githubTagFailure('0.1.1', {
+				GITHUB_REF: 'refs/tags/v0.1.1',
+				GITHUB_REF_NAME: 'v0.1.1',
 				GITHUB_REF_TYPE: 'tag',
 			}),
 		).toBeUndefined();
@@ -35,12 +35,12 @@ describe('release audit', () => {
 
 	it('rejects a GitHub tag that does not exactly match the package version', () => {
 		expect(
-			githubTagFailure('0.1.0', {
-				GITHUB_REF: 'refs/tags/v0.1.1',
-				GITHUB_REF_NAME: 'v0.1.1',
+			githubTagFailure('0.1.1', {
+				GITHUB_REF: 'refs/tags/v0.1.2',
+				GITHUB_REF_NAME: 'v0.1.2',
 				GITHUB_REF_TYPE: 'tag',
 			}),
-		).toBe('GitHub tag must exactly match package version v0.1.0');
+		).toBe('GitHub tag must exactly match package version v0.1.1');
 	});
 
 	it('pins the complete gate before one publish action without shell token materialization', () => {
