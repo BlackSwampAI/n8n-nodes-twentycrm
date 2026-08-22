@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- No changes yet.
+## 0.1.1
+
+- Refresh the npm README with package badges, navigation, current installation guidance, provenance details, and Black Swamp AI product-page links.
+- Set the package homepage to the Black Swamp AI Twenty CRM integration page.
 
 ## 0.1.0
 

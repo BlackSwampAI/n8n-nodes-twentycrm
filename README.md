@@ -1,18 +1,35 @@
-# Twenty CRM for n8n
+# @blackswampai/n8n-nodes-twentycrm
 
-`@blackswampai/n8n-nodes-twentycrm` is an independent n8n community-node package for Twenty CRM. Version 0.1 is under active development and has not been published to npm.
+[![npm version](https://img.shields.io/npm/v/%40blackswampai%2Fn8n-nodes-twentycrm)](https://www.npmjs.com/package/@blackswampai/n8n-nodes-twentycrm)
+[![CI](https://github.com/BlackSwampAI/n8n-nodes-twentycrm/actions/workflows/ci.yml/badge.svg)](https://github.com/BlackSwampAI/n8n-nodes-twentycrm/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/npm/l/%40blackswampai%2Fn8n-nodes-twentycrm)](LICENSE.md)
+
+An independent n8n community-node package for connecting Twenty CRM workflows to standard and custom objects, metadata-driven records, and signed record-event webhooks.
 
 > This is an unofficial Black Swamp AI community integration. It is not affiliated with, sponsored by, or endorsed by Twenty.com, PBC. Twenty and the Twenty logo are trademarks of Twenty.com, PBC.
 
+[Installation](#installation) · [Compatibility](#compatibility) · [Credentials](#credentials) · [Operations](#operations) · [Troubleshooting](#troubleshooting) · [Black Swamp AI](https://blackswampai.com/n8n-nodes/twenty-crm/)
+
 ## Installation
 
-After publication, install the package through n8n's **Settings → Community Nodes** using:
+Install the package in a self-hosted n8n instance:
+
+1. Open **Settings → Community Nodes**.
+2. Select **Install** and enter:
 
 ```text
 @blackswampai/n8n-nodes-twentycrm
 ```
 
+3. Review n8n's community-node warning and confirm the installation.
+
 For development, use Node.js 22.22.0 or newer, clone the repository, then run `npm ci`, `npm run build`, and `npm run smoke:install`.
+
+Releases are published by the repository's tag-only GitHub Actions workflow with an [SLSA provenance attestation](https://slsa.dev/provenance/v1), which traces the package to the repository and commit it was built from. Verify the **Provenance** record on the [npm package page](https://www.npmjs.com/package/@blackswampai/n8n-nodes-twentycrm) or inspect the published attestations directly:
+
+```sh
+npm view @blackswampai/n8n-nodes-twentycrm dist.attestations
+```
 
 ## Compatibility
 
@@ -59,6 +76,7 @@ See [Troubleshooting](docs/TROUBLESHOOTING.md) for credential/network failures, 
 - [Twenty documentation](https://docs.twenty.com/)
 - [n8n community node documentation](https://docs.n8n.io/integrations/community-nodes/)
 - [Local Twenty harness](docs/LOCAL_TWENTY.md)
+- [Black Swamp AI — Twenty CRM for n8n](https://blackswampai.com/n8n-nodes/twenty-crm/)
 - [Project issues](https://github.com/BlackSwampAI/n8n-nodes-twentycrm/issues)
 - [Release process](RELEASING.md)
 
