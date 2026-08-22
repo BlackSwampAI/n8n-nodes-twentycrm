@@ -58,15 +58,23 @@ if (packageJson.peerDependencies?.['n8n-workflow'] !== '*') {
 }
 if (packageJson.n8n?.strict !== true) fail('package.json n8n.strict must be true');
 if (
-	JSON.stringify(packageJson.n8n?.nodes) !== JSON.stringify(['dist/nodes/Twenty/Twenty.node.js'])
+	JSON.stringify(packageJson.n8n?.nodes) !==
+	JSON.stringify(['dist/nodes/Twenty/Twenty.node.js', 'dist/nodes/Twenty/TwentyTrigger.node.js'])
 ) {
-	fail('package.json must register only the compiled Twenty CRM node');
+	fail(
+		'package.json must register exactly the compiled Twenty CRM action and Twenty CRM Trigger nodes in the approved order',
+	);
 }
 if (
 	JSON.stringify(packageJson.n8n?.credentials) !==
-	JSON.stringify(['dist/credentials/TwentyApi.credentials.js'])
+	JSON.stringify([
+		'dist/credentials/TwentyApi.credentials.js',
+		'dist/credentials/TwentyWebhookApi.credentials.js',
+	])
 ) {
-	fail('package.json must register only the compiled Twenty API credential');
+	fail(
+		'package.json must register exactly the compiled Twenty API and Twenty Webhook API credentials in the approved order',
+	);
 }
 if (packageJson.publishConfig?.access !== 'public') fail('publishConfig.access must be public');
 if (packageJson.engines?.node !== '>=22.22.0')

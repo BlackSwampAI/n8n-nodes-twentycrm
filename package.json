@@ -52,10 +52,12 @@
 		"n8nNodesApiVersion": 1,
 		"strict": true,
 		"credentials": [
-			"dist/credentials/TwentyApi.credentials.js"
+			"dist/credentials/TwentyApi.credentials.js",
+			"dist/credentials/TwentyWebhookApi.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/Twenty/Twenty.node.js"
+			"dist/nodes/Twenty/Twenty.node.js",
+			"dist/nodes/Twenty/TwentyTrigger.node.js"
 		]
 	},
 	"devDependencies": {
