@@ -54,6 +54,31 @@ function mapper(value: Record<string, unknown>) {
 	};
 }
 
+function relation(
+	type = 'MANY_TO_ONE',
+	sourceField = 'company',
+	targetObject = 'company',
+	sourceObject = 'opportunity',
+) {
+	return {
+		type,
+		source: {
+			objectId: 'source-object',
+			objectApiNameSingular: sourceObject,
+			objectApiNamePlural: 'opportunities',
+			fieldId: 'source-field',
+			fieldApiName: sourceField,
+		},
+		target: {
+			objectId: 'target-object',
+			objectApiNameSingular: targetObject,
+			objectApiNamePlural: `${targetObject}s`,
+			fieldId: 'target-field',
+			fieldApiName: 'opportunities',
+		},
+	};
+}
+
 describe('Twenty record field mapping', () => {
 	it('surfaces fixed-resource common fields first while retaining custom additional fields', () => {
 		const metadata = object([
@@ -182,6 +207,239 @@ describe('Twenty record field mapping', () => {
 			'invalid or stale',
 		);
 	});
+
+	it('maps only configured direct Opportunity relations to scalar REST IDs', () => {
+		const metadata = {
+			...object([
+				field({ apiName: 'name', label: 'Name' }),
+				field({ apiName: 'stage', label: 'Stage', type: 'SELECT' }),
+				field({ apiName: 'amount', label: 'Amount', type: 'CURRENCY' }),
+				field({ apiName: 'closeDate', label: 'Close Date', type: 'DATE_TIME' }),
+				field({ apiName: 'company', label: 'Company', type: 'RELATION', relation: relation() }),
+				field({
+					apiName: 'pointOfContact',
+					label: 'Point of Contact',
+					type: 'RELATION',
+					relation: relation('MANY_TO_ONE', 'pointOfContact', 'person'),
+				}),
+				field({
+					apiName: 'owner',
+					label: 'Owner',
+					type: 'RELATION',
+					relation: relation('MANY_TO_ONE', 'owner', 'workspaceMember'),
+				}),
+				field({
+					apiName: 'attachments',
+					label: 'Attachments',
+					type: 'RELATION',
+					relation: relation('ONE_TO_MANY', 'attachments', 'attachment'),
+				}),
+				field({ apiName: 'customValue', label: 'Custom Value' }),
+			]),
+			apiNameSingular: 'opportunity',
+		};
+		const common = buildFixedResourceMapperFields(metadata, 'create', 'opportunity');
+		expect(common.map(({ id }) => id)).toEqual([
+			'name',
+			'stage',
+			'amount__amountMicros',
+			'amount__currencyCode',
+			'closeDate',
+			'companyId',
+			'pointOfContactId',
+			'ownerId',
+		]);
+		expect(common.every(({ removed }) => removed === false)).toBe(true);
+		const additional = buildFixedResourceMapperFields(
+			metadata,
+			'create',
+			'opportunity',
+			'additional',
+		);
+		expect(additional.map(({ id }) => id)).toEqual(['customValue']);
+		expect(additional.map(({ id }) => id)).not.toEqual(
+			expect.arrayContaining([
+				'attachments',
+				'company',
+				'companyId',
+				'owner',
+				'ownerId',
+				'pointOfContact',
+				'pointOfContactId',
+			]),
+		);
+
+		expect(
+			reconstructRecordPayload(
+				metadata,
+				mapper({
+					name: 'Synthetic',
+					amount__amountMicros: 1000,
+					companyId: 'company-id',
+					pointOfContactId: 'person-id',
+				}),
+				'opportunity',
+			),
+		).toEqual({
+			name: 'Synthetic',
+			amount: { amountMicros: 1000 },
+			companyId: 'company-id',
+			pointOfContactId: 'person-id',
+		});
+		expect(() =>
+			reconstructRecordPayload(metadata, mapper({ company: {} }), 'opportunity'),
+		).toThrow('unknown or stale');
+		expect(
+			reconstructRecordPayload(metadata, mapper({ ownerId: 'owner-id' }), 'opportunity'),
+		).toEqual({ ownerId: 'owner-id' });
+		expect(reconstructRecordPayload(metadata, mapper({ company: {} }))).toEqual({ company: {} });
+
+		const unsupportedRelations = {
+			...object([
+				field({
+					apiName: 'company',
+					label: 'Company',
+					type: 'RELATION',
+					relation: relation(),
+					isReadOnly: true,
+				}),
+				field({
+					apiName: 'pointOfContact',
+					label: 'Point of Contact',
+					type: 'RELATION',
+					relation: relation('ONE_TO_MANY', 'pointOfContact', 'person'),
+				}),
+			]),
+			apiNameSingular: 'opportunity',
+		};
+		expect(
+			buildFixedResourceMapperFields(unsupportedRelations, 'create', 'opportunity').map(
+				({ id }) => id,
+			),
+		).toEqual([]);
+		expect(() =>
+			reconstructRecordPayload(
+				unsupportedRelations,
+				mapper({ companyId: 'company-id', pointOfContactId: 'person-id' }),
+				'opportunity',
+			),
+		).toThrow('unknown or stale');
+
+		for (const malformedRelation of [
+			relation('MANY_TO_ONE', 'company', 'company', 'wrongSource'),
+			relation('MANY_TO_ONE', 'wrongField', 'company'),
+			relation('MANY_TO_ONE', 'company', 'person'),
+		]) {
+			const malformed = {
+				...object([
+					field({
+						apiName: 'company',
+						label: 'Company',
+						type: 'RELATION',
+						relation: malformedRelation,
+					}),
+				]),
+				apiNameSingular: 'opportunity',
+			};
+			expect(
+				buildFixedResourceMapperFields(malformed, 'create', 'opportunity').map(({ id }) => id),
+			).toEqual([]);
+			expect(() =>
+				reconstructRecordPayload(malformed, mapper({ companyId: 'company-id' }), 'opportunity'),
+			).toThrow('unknown or stale');
+		}
+	});
+
+	it('configures Task and parent relation IDs while omitting fixed child relations', () => {
+		const task = {
+			...object([
+				field({ apiName: 'title', label: 'Title' }),
+				field({ apiName: 'bodyV2', label: 'Body', type: 'RICH_TEXT' }),
+				field({ apiName: 'dueAt', label: 'Due Date', type: 'DATE_TIME' }),
+				field({ apiName: 'status', label: 'Status', type: 'SELECT' }),
+				field({
+					apiName: 'assignee',
+					label: 'Assignee',
+					type: 'RELATION',
+					relation: relation('MANY_TO_ONE', 'assignee', 'workspaceMember', 'task'),
+				}),
+				field({
+					apiName: 'taskTargets',
+					label: 'Targets',
+					type: 'RELATION',
+					relation: relation('ONE_TO_MANY', 'taskTargets', 'taskTarget', 'task'),
+				}),
+				field({ apiName: 'customMorph', label: 'Custom Morph', type: 'MORPH_RELATION' }),
+			]),
+			apiNameSingular: 'task',
+		};
+		expect(buildFixedResourceMapperFields(task, 'create', 'task').map(({ id }) => id)).toEqual([
+			'title',
+			'bodyV2__markdown',
+			'dueAt',
+			'status',
+			'assigneeId',
+		]);
+		expect(
+			buildFixedResourceMapperFields(task, 'create', 'task', 'additional').map(
+				({ id, displayName }) => ({ id, displayName }),
+			),
+		).toEqual([{ id: 'bodyV2__blocknote', displayName: 'Body: BlockNote JSON' }]);
+		expect(
+			reconstructRecordPayload(
+				task,
+				mapper({ title: 'Synthetic', bodyV2__markdown: 'Body', assigneeId: 'member-id' }),
+				'task',
+			),
+		).toEqual({ title: 'Synthetic', bodyV2: { markdown: 'Body' }, assigneeId: 'member-id' });
+		expect(() => reconstructRecordPayload(task, mapper({ taskTargets: [] }), 'task')).toThrow(
+			'unknown or stale',
+		);
+		expect(reconstructRecordPayload(task, mapper({ taskTargets: [] }))).toEqual({
+			taskTargets: [],
+		});
+
+		const note = {
+			...object([
+				field({ apiName: 'title', label: 'Title' }),
+				field({ apiName: 'bodyV2', label: 'Body', type: 'RICH_TEXT' }),
+				field({ apiName: 'noteTargets', label: 'Targets', type: 'MORPH_RELATION' }),
+			]),
+			apiNameSingular: 'note',
+		};
+		expect(buildFixedResourceMapperFields(note, 'update', 'note').map(({ id }) => id)).toEqual([
+			'title',
+			'bodyV2__markdown',
+		]);
+		expect(
+			buildFixedResourceMapperFields(note, 'update', 'note', 'additional').map(
+				({ id, displayName }) => ({ id, displayName }),
+			),
+		).toEqual([{ id: 'bodyV2__blocknote', displayName: 'Body: BlockNote JSON' }]);
+		expect(
+			reconstructRecordPayload(note, mapper({ bodyV2__blocknote: 'Synthetic blocknote' }), 'note'),
+		).toEqual({ bodyV2: { blocknote: 'Synthetic blocknote', markdown: null } });
+
+		for (const [resource, objectApiName, fieldApiName, targetApiName, expectedId] of [
+			['company', 'company', 'accountOwner', 'workspaceMember', 'accountOwnerId'],
+			['person', 'person', 'company', 'company', 'companyId'],
+		] as const) {
+			const metadata = {
+				...object([
+					field({
+						apiName: fieldApiName,
+						label: 'Relation',
+						type: 'RELATION',
+						relation: relation('MANY_TO_ONE', fieldApiName, targetApiName, objectApiName),
+					}),
+				]),
+				apiNameSingular: objectApiName,
+			};
+			expect(
+				buildFixedResourceMapperFields(metadata, 'create', resource).map(({ id }) => id),
+			).toEqual([expectedId]);
+		}
+	});
 	it('maps scalar, select, array, raw, relation, and future types deterministically', () => {
 		const fields = buildRecordMapperFields(
 			object([
@@ -282,7 +540,7 @@ describe('Twenty record field mapping', () => {
 		);
 		expect(schema.find(({ id }) => id === 'richText__blocknote')).toMatchObject({
 			type: 'string',
-			displayName: 'Rich Text: Blocknote',
+			displayName: 'Rich Text: BlockNote JSON',
 		});
 		const payload = reconstructRecordPayload(
 			metadata,

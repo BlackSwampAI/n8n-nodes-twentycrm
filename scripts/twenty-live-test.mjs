@@ -73,6 +73,9 @@ async function qualifyMetadataDiscovery() {
 	let hasQualifiedObject = false;
 	let recordObject;
 	let lifecycleObject;
+	let opportunityObject;
+	let taskObject;
+	let noteObject;
 	for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
 		const data = await probe(
 			'Metadata discovery',
@@ -90,12 +93,15 @@ async function qualifyMetadataDiscovery() {
 				hasQualifiedObject = true;
 			if (object.apiNameSingular === 'person') recordObject = object;
 			if (object.apiNameSingular === 'company') lifecycleObject = object;
+			if (object.apiNameSingular === 'opportunity') opportunityObject = object;
+			if (object.apiNameSingular === 'task') taskObject = object;
+			if (object.apiNameSingular === 'note') noteObject = object;
 		}
 		if (!connection.pageInfo.hasNextPage) {
 			if (!hasQualifiedObject)
 				throw new Error('Metadata discovery did not return a usable standard object.');
 			console.log('Compiled metadata normalization qualification passed.');
-			return { recordObject, lifecycleObject };
+			return { recordObject, lifecycleObject, opportunityObject, taskObject, noteObject };
 		}
 		const nextCursor = connection.pageInfo.endCursor;
 		if (typeof nextCursor !== 'string' || nextCursor.length === 0 || cursors.has(nextCursor)) {
@@ -107,8 +113,9 @@ async function qualifyMetadataDiscovery() {
 	throw new Error('Metadata discovery pagination exceeded the safety limit.');
 }
 
-const { recordObject, lifecycleObject } = await qualifyMetadataDiscovery();
-if (!recordObject || !lifecycleObject)
+const { recordObject, lifecycleObject, opportunityObject, taskObject, noteObject } =
+	await qualifyMetadataDiscovery();
+if (!recordObject || !lifecycleObject || !opportunityObject || !taskObject || !noteObject)
 	throw new Error('Record qualification object is unavailable.');
 
 const liveContext = {
@@ -393,3 +400,441 @@ try {
 }
 if (personLifecycleFailure) throw personLifecycleFailure;
 console.log('Compiled fixed Person Delete and absence qualification passed.');
+
+const opportunityService = createRecordService(liveContext, {
+	getObject: async () => opportunityObject,
+	getObjects: async () => [opportunityObject],
+});
+
+function isQualifiedDirectRelation(field, objectApiName, fieldApiName, targetApiName) {
+	return (
+		field?.apiName === fieldApiName &&
+		field.type === 'RELATION' &&
+		field.relation?.type === 'MANY_TO_ONE' &&
+		field.relation.source.objectApiNameSingular === objectApiName &&
+		field.relation.source.fieldApiName === fieldApiName &&
+		field.relation.target.objectApiNameSingular === targetApiName &&
+		field.isActive &&
+		!field.isReadOnly &&
+		!field.isSystem
+	);
+}
+const opportunityCompanyField = opportunityObject.fields.find((field) =>
+	isQualifiedDirectRelation(field, 'opportunity', 'company', 'company'),
+);
+const opportunityContactField = opportunityObject.fields.find((field) =>
+	isQualifiedDirectRelation(field, 'opportunity', 'pointOfContact', 'person'),
+);
+const opportunityOwnerField = opportunityObject.fields.find((field) =>
+	isQualifiedDirectRelation(field, 'opportunity', 'owner', 'workspaceMember'),
+);
+if (!opportunityCompanyField || !opportunityContactField || !opportunityOwnerField) {
+	throw new Error('Opportunity direct-relation metadata qualification is unavailable.');
+}
+
+const opportunityCompanyName = `n8n-pr11-company-${crypto.randomUUID()}`;
+const opportunityPersonName = `n8n-pr11-person-${crypto.randomUUID()}`;
+const opportunityName = `n8n-pr11-opportunity-${crypto.randomUUID()}`;
+const updatedOpportunityName = `${opportunityName}-updated`;
+let opportunityCompanyId;
+let opportunityPersonId;
+let opportunityId;
+
+function hasOwnedRecordId(record) {
+	return typeof record.id === 'string' && record.id.length > 0;
+}
+
+const workspaceMemberPayload = await liveContext.helpers.httpRequestWithAuthentication(
+	'twentyApi',
+	{
+		method: 'GET',
+		url: `${urls.coreRest}/workspaceMembers`,
+		qs: { limit: 1 },
+	},
+);
+const workspaceMember = workspaceMemberPayload?.data?.workspaceMembers?.[0];
+if (!workspaceMember || !hasOwnedRecordId(workspaceMember)) {
+	throw new Error('Workspace member read qualification is unavailable.');
+}
+const workspaceMemberId = workspaceMember.id;
+
+async function findOwnedOpportunityParents() {
+	const companies = await lifecycleService.getMany('company', {
+		returnAll: false,
+		limit: 200,
+		filter: `name[eq]:${JSON.stringify(opportunityCompanyName)}`,
+	});
+	if (
+		companies.some((record) => !hasOwnedRecordId(record) || record.name !== opportunityCompanyName)
+	) {
+		throw new Error('Opportunity parent cleanup lookup returned an unexpected shape.');
+	}
+	const people = await personLifecycleService.getMany('person', {
+		returnAll: false,
+		limit: 200,
+		filter: `${personNameField.apiName}.firstName[eq]:${JSON.stringify(opportunityPersonName)}`,
+	});
+	if (
+		people.some(
+			(record) =>
+				!hasOwnedRecordId(record) ||
+				record[personNameField.apiName]?.firstName !== opportunityPersonName,
+		)
+	) {
+		throw new Error('Opportunity parent cleanup lookup returned an unexpected shape.');
+	}
+	return { companies, people };
+}
+
+async function findOwnedOpportunities(name) {
+	const matches = await opportunityService.getMany('opportunity', {
+		returnAll: false,
+		limit: 200,
+		filter: `name[eq]:${JSON.stringify(name)}`,
+	});
+	if (matches.some((record) => !hasOwnedRecordId(record) || record.name !== name)) {
+		throw new Error('Opportunity cleanup lookup returned an unexpected shape.');
+	}
+	return matches;
+}
+
+async function cleanupOpportunityLifecycle() {
+	if (opportunityId) {
+		try {
+			await opportunityService.delete('opportunity', opportunityId);
+		} catch {
+			// Exact-owned fallback and absence verification below determine cleanup success.
+		}
+	}
+	for (const name of [opportunityName, updatedOpportunityName]) {
+		for (const record of await findOwnedOpportunities(name)) {
+			try {
+				await opportunityService.delete('opportunity', record.id);
+			} catch {
+				// Absence verification below determines cleanup success.
+			}
+		}
+	}
+	for (const [service, apiName, id] of [
+		[lifecycleService, 'company', opportunityCompanyId],
+		[personLifecycleService, 'person', opportunityPersonId],
+	]) {
+		if (!id) continue;
+		try {
+			await service.delete(apiName, id);
+		} catch {
+			// Exact-owned fallback and absence verification below determine cleanup success.
+		}
+	}
+	const parents = await findOwnedOpportunityParents();
+	for (const record of parents.people) {
+		try {
+			await personLifecycleService.delete('person', record.id);
+		} catch {
+			// Absence verification below determines cleanup success.
+		}
+	}
+	for (const record of parents.companies) {
+		try {
+			await lifecycleService.delete('company', record.id);
+		} catch {
+			// Absence verification below determines cleanup success.
+		}
+	}
+	for (const name of [opportunityName, updatedOpportunityName]) {
+		if ((await findOwnedOpportunities(name)).length !== 0) {
+			throw new Error('Opportunity cleanup could not verify absence.');
+		}
+	}
+	const remainingParents = await findOwnedOpportunityParents();
+	if (remainingParents.companies.length !== 0 || remainingParents.people.length !== 0) {
+		throw new Error('Opportunity parent cleanup could not verify absence.');
+	}
+}
+
+let opportunityLifecycleFailure;
+try {
+	const company = await lifecycleService.create(
+		'company',
+		reconstructRecordPayload(
+			lifecycleObject,
+			mappedValue({ name: opportunityCompanyName, accountOwnerId: workspaceMemberId }),
+			'company',
+		),
+	);
+	if (
+		typeof company.id !== 'string' ||
+		company.name !== opportunityCompanyName ||
+		company.accountOwnerId !== workspaceMemberId
+	) {
+		throw new Error('Opportunity Company parent returned an unexpected shape.');
+	}
+	opportunityCompanyId = company.id;
+	const person = await personLifecycleService.create(
+		'person',
+		reconstructRecordPayload(
+			recordObject,
+			mappedValue({
+				[`${personNameField.apiName}__firstName`]: opportunityPersonName,
+				[`${personNameField.apiName}__lastName`]: personLastName,
+				companyId: opportunityCompanyId,
+			}),
+			'person',
+		),
+	);
+	if (
+		typeof person.id !== 'string' ||
+		person[personNameField.apiName]?.firstName !== opportunityPersonName ||
+		person.companyId !== opportunityCompanyId
+	) {
+		throw new Error('Opportunity Person parent returned an unexpected shape.');
+	}
+	opportunityPersonId = person.id;
+	const created = await opportunityService.create(
+		'opportunity',
+		reconstructRecordPayload(
+			opportunityObject,
+			mappedValue({
+				name: opportunityName,
+				companyId: opportunityCompanyId,
+				pointOfContactId: opportunityPersonId,
+				ownerId: workspaceMemberId,
+			}),
+			'opportunity',
+		),
+	);
+	if (
+		typeof created.id !== 'string' ||
+		created.name !== opportunityName ||
+		created.companyId !== opportunityCompanyId ||
+		created.pointOfContactId !== opportunityPersonId ||
+		created.ownerId !== workspaceMemberId
+	) {
+		throw new Error('Opportunity Create returned an unexpected relation shape.');
+	}
+	opportunityId = created.id;
+	const fetched = await opportunityService.get('opportunity', opportunityId);
+	if (
+		fetched.name !== opportunityName ||
+		fetched.companyId !== opportunityCompanyId ||
+		fetched.pointOfContactId !== opportunityPersonId ||
+		fetched.ownerId !== workspaceMemberId
+	) {
+		throw new Error('Opportunity Get did not verify direct relations.');
+	}
+	const listed = await opportunityService.getMany('opportunity', {
+		returnAll: false,
+		limit: 1,
+		filter: `id[eq]:${JSON.stringify(opportunityId)}`,
+	});
+	if (listed.length !== 1 || listed[0]?.id !== opportunityId) {
+		throw new Error('Opportunity Get Many did not verify the fixture.');
+	}
+	const updated = await opportunityService.update(
+		'opportunity',
+		opportunityId,
+		reconstructRecordPayload(
+			opportunityObject,
+			mappedValue({
+				name: updatedOpportunityName,
+				companyId: opportunityCompanyId,
+				pointOfContactId: opportunityPersonId,
+				ownerId: workspaceMemberId,
+			}),
+			'opportunity',
+		),
+	);
+	if (
+		updated.name !== updatedOpportunityName ||
+		updated.companyId !== opportunityCompanyId ||
+		updated.pointOfContactId !== opportunityPersonId ||
+		updated.ownerId !== workspaceMemberId
+	) {
+		throw new Error('Opportunity Update did not verify direct relations.');
+	}
+	console.log('Compiled fixed Opportunity relation-ID lifecycle qualification passed.');
+} catch (error) {
+	opportunityLifecycleFailure = error;
+} finally {
+	try {
+		await cleanupOpportunityLifecycle();
+	} catch {
+		throw new Error('Disposable Opportunity lifecycle cleanup failed.');
+	}
+}
+if (opportunityLifecycleFailure) throw opportunityLifecycleFailure;
+console.log('Compiled fixed Opportunity Delete and absence qualification passed.');
+
+async function runOwnedTitleLifecycle({
+	apiName,
+	object,
+	title,
+	updatedTitle,
+	createValues,
+	updateValues,
+	verify,
+}) {
+	const service = createRecordService(liveContext, {
+		getObject: async () => object,
+		getObjects: async () => [object],
+	});
+	let id;
+	let lifecycleError;
+	async function findOwned(name) {
+		const matches = await service.getMany(apiName, {
+			returnAll: false,
+			limit: 200,
+			filter: `title[eq]:${JSON.stringify(name)}`,
+		});
+		if (matches.some((record) => !hasOwnedRecordId(record) || record.title !== name)) {
+			throw new Error('Fixed-resource cleanup lookup returned an unexpected shape.');
+		}
+		return matches;
+	}
+	async function cleanup() {
+		if (id) {
+			try {
+				await service.delete(apiName, id);
+			} catch {
+				// Exact-title fallback and absence verification below determine cleanup success.
+			}
+		}
+		for (const name of [title, updatedTitle]) {
+			for (const record of await findOwned(name)) {
+				try {
+					await service.delete(apiName, record.id);
+				} catch {
+					// Absence verification below determines cleanup success.
+				}
+			}
+		}
+		for (const name of [title, updatedTitle]) {
+			if ((await findOwned(name)).length !== 0) {
+				throw new Error('Fixed-resource cleanup could not verify absence.');
+			}
+		}
+	}
+	try {
+		const created = await service.create(
+			apiName,
+			reconstructRecordPayload(object, mappedValue(createValues), apiName),
+		);
+		if (!hasOwnedRecordId(created))
+			throw new Error('Fixed-resource Create returned an invalid identifier shape.');
+		if (created.title !== title)
+			throw new Error('Fixed-resource Create did not preserve its owned title.');
+		if (!verify(created, createValues))
+			throw new Error('Fixed-resource Create did not preserve its qualified field shape.');
+		id = created.id;
+		const fetched = await service.get(apiName, id);
+		if (fetched.title !== title || !verify(fetched, createValues)) {
+			throw new Error('Fixed-resource Get did not verify the fixture.');
+		}
+		const listed = await service.getMany(apiName, {
+			returnAll: false,
+			limit: 1,
+			filter: `id[eq]:${JSON.stringify(id)}`,
+		});
+		if (listed.length !== 1 || listed[0]?.id !== id) {
+			throw new Error('Fixed-resource Get Many did not verify the fixture.');
+		}
+		const updated = await service.update(
+			apiName,
+			id,
+			reconstructRecordPayload(object, mappedValue(updateValues), apiName),
+		);
+		if (updated.title !== updatedTitle || !verify(updated, updateValues)) {
+			throw new Error('Fixed-resource Update returned an unexpected shape.');
+		}
+	} catch (error) {
+		lifecycleError = error;
+	} finally {
+		try {
+			await cleanup();
+		} catch {
+			throw new Error('Disposable fixed-resource lifecycle cleanup failed.');
+		}
+	}
+	if (lifecycleError) throw lifecycleError;
+}
+
+const taskStatusField = taskObject.fields.find(
+	(field) =>
+		field.apiName === 'status' &&
+		field.type === 'SELECT' &&
+		field.isActive &&
+		!field.isReadOnly &&
+		!field.isSystem,
+);
+const taskStatus = Array.isArray(taskStatusField?.options)
+	? taskStatusField.options.find((option) => typeof option?.value === 'string')?.value
+	: undefined;
+const taskBodyField = taskObject.fields.find(
+	(field) =>
+		field.apiName === 'bodyV2' &&
+		field.type === 'RICH_TEXT' &&
+		field.isActive &&
+		!field.isReadOnly &&
+		!field.isSystem,
+);
+const taskAssigneeField = taskObject.fields.find((field) =>
+	isQualifiedDirectRelation(field, 'task', 'assignee', 'workspaceMember'),
+);
+if (!taskStatus || !taskBodyField || !taskAssigneeField) {
+	throw new Error('Task metadata qualification is unavailable.');
+}
+const taskTitle = `n8n-pr11-task-${crypto.randomUUID()}`;
+const updatedTaskTitle = `${taskTitle}-updated`;
+const taskMarkdown = `Task body ${crypto.randomUUID()}`;
+const updatedTaskMarkdown = `${taskMarkdown} updated`;
+const taskDueAt = new Date(Date.now() + 86_400_000).toISOString();
+await runOwnedTitleLifecycle({
+	apiName: 'task',
+	object: taskObject,
+	title: taskTitle,
+	updatedTitle: updatedTaskTitle,
+	createValues: {
+		title: taskTitle,
+		bodyV2__markdown: taskMarkdown,
+		dueAt: taskDueAt,
+		status: taskStatus,
+		assigneeId: workspaceMemberId,
+	},
+	updateValues: {
+		title: updatedTaskTitle,
+		bodyV2__markdown: updatedTaskMarkdown,
+		dueAt: taskDueAt,
+		status: taskStatus,
+		assigneeId: workspaceMemberId,
+	},
+	verify: (record, values) =>
+		record.bodyV2?.markdown === values.bodyV2__markdown &&
+		record.dueAt === values.dueAt &&
+		record.status === values.status &&
+		record.assigneeId === values.assigneeId,
+});
+console.log('Compiled fixed Task rich-text/relation lifecycle qualification passed.');
+
+const noteBodyField = noteObject.fields.find(
+	(field) =>
+		field.apiName === 'bodyV2' &&
+		field.type === 'RICH_TEXT' &&
+		field.isActive &&
+		!field.isReadOnly &&
+		!field.isSystem,
+);
+if (!noteBodyField) throw new Error('Note rich-text metadata qualification is unavailable.');
+const noteTitle = `n8n-pr11-note-${crypto.randomUUID()}`;
+const updatedNoteTitle = `${noteTitle}-updated`;
+const noteMarkdown = `Note body ${crypto.randomUUID()}`;
+const updatedNoteMarkdown = `Note body ${crypto.randomUUID()}`;
+await runOwnedTitleLifecycle({
+	apiName: 'note',
+	object: noteObject,
+	title: noteTitle,
+	updatedTitle: updatedNoteTitle,
+	createValues: { title: noteTitle, bodyV2__markdown: noteMarkdown },
+	updateValues: { title: updatedNoteTitle, bodyV2__markdown: updatedNoteMarkdown },
+	verify: (record, values) => record.bodyV2?.markdown === values.bodyV2__markdown,
+});
+console.log('Compiled fixed Note rich-text lifecycle qualification passed.');
