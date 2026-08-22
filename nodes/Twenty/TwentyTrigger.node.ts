@@ -42,7 +42,7 @@ export class TwentyTrigger implements INodeType {
 		properties: [
 			{
 				displayName:
-					'Create the webhook manually in Twenty Settings → API & Webhooks. Use the n8n webhook URL shown above and save Twenty’s generated secret in the Twenty Webhook credential. Twenty sends all record events to this URL; this node filters them after signature verification.',
+					'Create the webhook manually in Twenty Settings → API & Webhooks using the n8n webhook URL shown above. Enter a strong shared secret even though Twenty labels it optional, then save the same secret in the Twenty Webhook API credential. This trigger requires signed deliveries and filters Twenty’s all-events stream after verification.',
 				name: 'manualRegistrationNotice',
 				type: 'notice',
 				default: '',

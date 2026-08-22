@@ -55,9 +55,11 @@ describe('Twenty CRM Trigger node', () => {
 			{ name: 'Record Deleted', value: 'deleted' },
 			{ name: 'Record Updated', value: 'updated' },
 		]);
-		expect(
-			node.description.properties.find(({ name }) => name === 'manualRegistrationNotice'),
-		).toBeDefined();
+		const notice = node.description.properties.find(
+			({ name }) => name === 'manualRegistrationNotice',
+		);
+		expect(notice?.displayName).toContain('even though Twenty labels it optional');
+		expect(notice?.displayName).toContain('requires signed deliveries');
 	});
 
 	it('loads active standard and custom objects with All Objects first', async () => {

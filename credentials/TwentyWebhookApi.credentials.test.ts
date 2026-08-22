@@ -16,6 +16,7 @@ describe('Twenty Webhook API credential', () => {
 				type: 'string',
 				typeOptions: { password: true },
 				required: true,
+				description: expect.stringContaining('entered in Twenty’s webhook form'),
 			}),
 		);
 	});
