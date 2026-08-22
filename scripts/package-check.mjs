@@ -15,10 +15,17 @@ const expectedFiles = [
 	'dist/credentials/TwentyApi.credentials.d.ts',
 	'dist/credentials/TwentyApi.credentials.js',
 	'dist/credentials/TwentyApi.credentials.js.map',
+	'dist/credentials/TwentyWebhookApi.credentials.d.ts',
+	'dist/credentials/TwentyWebhookApi.credentials.js',
+	'dist/credentials/TwentyWebhookApi.credentials.js.map',
 	'dist/nodes/Twenty/Twenty.node.d.ts',
 	'dist/nodes/Twenty/Twenty.node.js',
 	'dist/nodes/Twenty/Twenty.node.js.map',
 	'dist/nodes/Twenty/Twenty.node.json',
+	'dist/nodes/Twenty/TwentyTrigger.node.d.ts',
+	'dist/nodes/Twenty/TwentyTrigger.node.js',
+	'dist/nodes/Twenty/TwentyTrigger.node.js.map',
+	'dist/nodes/Twenty/TwentyTrigger.node.json',
 	'dist/nodes/Twenty/twenty.dark.svg',
 	'dist/nodes/Twenty/twenty.svg',
 	'dist/nodes/Twenty/shared/contracts.d.ts',
@@ -45,6 +52,9 @@ const expectedFiles = [
 	'dist/nodes/Twenty/shared/urls.d.ts',
 	'dist/nodes/Twenty/shared/urls.js',
 	'dist/nodes/Twenty/shared/urls.js.map',
+	'dist/nodes/Twenty/shared/webhook.d.ts',
+	'dist/nodes/Twenty/shared/webhook.js',
+	'dist/nodes/Twenty/shared/webhook.js.map',
 ].sort();
 const missing = expectedFiles.filter((path) => !files.includes(path));
 const unexpected = files.filter((path) => !expectedFiles.includes(path));
