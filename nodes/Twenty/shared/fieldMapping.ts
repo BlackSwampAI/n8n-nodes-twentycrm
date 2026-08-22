@@ -3,6 +3,7 @@ import type { IDataObject, ResourceMapperField, ResourceMapperValue } from 'n8n-
 import type { NormalizedFieldDefinition, NormalizedObjectDefinition } from './contracts';
 
 type MapperMode = 'create' | 'update';
+export type FixedResource = 'company' | 'person' | 'opportunity' | 'task' | 'note';
 type CompoundPart = { name: string; label: string; type: ResourceMapperField['type'] };
 
 const COMPOUND_PARTS: Readonly<Record<string, readonly CompoundPart[]>> = {
@@ -40,7 +41,7 @@ const COMPOUND_PARTS: Readonly<Record<string, readonly CompoundPart[]>> = {
 		{ name: 'secondaryLinks', label: 'Secondary Links (JSON)', type: 'array' },
 	],
 	RICH_TEXT: [
-		{ name: 'blocknote', label: 'Blocknote', type: 'string' },
+		{ name: 'blocknote', label: 'BlockNote JSON', type: 'string' },
 		{ name: 'markdown', label: 'Markdown', type: 'string' },
 	],
 };
@@ -154,9 +155,22 @@ export function buildRecordMapperFields(
 	});
 }
 
-const FIXED_PREFERRED_IDS: Readonly<Record<'company' | 'person', readonly string[]>> = {
+export const FIXED_RESOURCES: readonly FixedResource[] = [
+	'company',
+	'person',
+	'opportunity',
+	'task',
+	'note',
+];
+
+export function isFixedResource(value: string): value is FixedResource {
+	return FIXED_RESOURCES.includes(value as FixedResource);
+}
+
+const FIXED_PREFERRED_IDS: Readonly<Record<FixedResource, readonly string[]>> = {
 	company: [
 		'name',
+		'accountOwnerId',
 		'domainName__primaryLinkUrl',
 		'employees',
 		'address__addressStreet1',
@@ -172,18 +186,93 @@ const FIXED_PREFERRED_IDS: Readonly<Record<'company' | 'person', readonly string
 		'phones__primaryPhoneNumber',
 		'jobTitle',
 		'city',
+		'companyId',
 	],
+	opportunity: [
+		'name',
+		'stage',
+		'amount__amountMicros',
+		'amount__currencyCode',
+		'closeDate',
+		'companyId',
+		'pointOfContactId',
+		'ownerId',
+	],
+	task: ['title', 'bodyV2__markdown', 'dueAt', 'status', 'assigneeId'],
+	note: ['title', 'bodyV2__markdown'],
 };
+
+type FixedDirectRelation = { fieldApiName: string; targetObjectApiName: string };
+
+const FIXED_DIRECT_RELATIONS: Readonly<
+	Partial<Record<FixedResource, readonly FixedDirectRelation[]>>
+> = {
+	company: [{ fieldApiName: 'accountOwner', targetObjectApiName: 'workspaceMember' }],
+	person: [{ fieldApiName: 'company', targetObjectApiName: 'company' }],
+	opportunity: [
+		{ fieldApiName: 'company', targetObjectApiName: 'company' },
+		{ fieldApiName: 'pointOfContact', targetObjectApiName: 'person' },
+		{ fieldApiName: 'owner', targetObjectApiName: 'workspaceMember' },
+	],
+	task: [{ fieldApiName: 'assignee', targetObjectApiName: 'workspaceMember' }],
+};
+
+function directRelationFields(
+	object: NormalizedObjectDefinition,
+	resource: FixedResource,
+): NormalizedFieldDefinition[] {
+	const configured = new Map(
+		(FIXED_DIRECT_RELATIONS[resource] ?? []).map((relation) => [relation.fieldApiName, relation]),
+	);
+	return writableFields(object).filter((field) => {
+		const expected = configured.get(field.apiName);
+		return (
+			expected !== undefined &&
+			field.type === 'RELATION' &&
+			field.relation?.type === 'MANY_TO_ONE' &&
+			field.relation.source.objectApiNameSingular === object.apiNameSingular &&
+			field.relation.source.fieldApiName === field.apiName &&
+			field.relation.target.objectApiNameSingular === expected.targetObjectApiName
+		);
+	});
+}
+
+function fixedMapperFields(
+	object: NormalizedObjectDefinition,
+	mode: MapperMode,
+	resource: FixedResource,
+): ResourceMapperField[] {
+	const directRelations = directRelationFields(object, resource);
+	const relationNames = new Set(directRelations.map(({ apiName }) => apiName));
+	const fixedRelationNames = new Set(
+		writableFields(object)
+			.filter((field) => field.type === 'RELATION' || field.type === 'MORPH_RELATION')
+			.map(({ apiName }) => apiName),
+	);
+	return [
+		...buildRecordMapperFields(object, mode).filter(
+			(field) => !relationNames.has(field.id) && !fixedRelationNames.has(field.id),
+		),
+		...directRelations.map((field) =>
+			mapperField(
+				`${field.apiName}Id`,
+				`${field.label} ID`,
+				'string',
+				requiredOnCreate(field, mode),
+			),
+		),
+	];
+}
 
 export function buildFixedResourceMapperFields(
 	object: NormalizedObjectDefinition,
 	mode: MapperMode,
-	resource: 'company' | 'person',
+	resource: FixedResource,
 	section: 'common' | 'additional' = 'common',
 ): ResourceMapperField[] {
 	const preferred = FIXED_PREFERRED_IDS[resource];
 	const rank = new Map(preferred.map((id, index) => [id, index]));
-	return buildRecordMapperFields(object, mode)
+	return fixedMapperFields(object, mode, resource)
 		.filter((field) => (section === 'common' ? rank.has(field.id) : !rank.has(field.id)))
 		.map((field) => (section === 'common' ? { ...field, removed: false } : field))
 		.sort((left, right) => {
@@ -236,10 +325,15 @@ function mapperValues(value: unknown): Record<string, unknown> {
 export function reconstructRecordPayload(
 	object: NormalizedObjectDefinition,
 	mapperValue: ResourceMapperValue | unknown,
+	resource?: FixedResource,
 ): IDataObject {
 	const values = mapperValues(mapperValue);
 	const allowed = new Map<string, { parent: string; part?: string }>();
+	const directRelations = resource ? directRelationFields(object, resource) : [];
+	const relationNames = new Set(directRelations.map(({ apiName }) => apiName));
 	for (const field of writableFields(object)) {
+		if (resource && (field.type === 'RELATION' || field.type === 'MORPH_RELATION')) continue;
+		if (relationNames.has(field.apiName)) continue;
 		const compound = COMPOUND_PARTS[field.type];
 		if (compound) {
 			for (const part of compound) {
@@ -248,6 +342,9 @@ export function reconstructRecordPayload(
 		} else {
 			allowed.set(field.apiName, { parent: field.apiName });
 		}
+	}
+	for (const field of directRelations) {
+		allowed.set(`${field.apiName}Id`, { parent: `${field.apiName}Id` });
 	}
 	const payload: IDataObject = {};
 	for (const [key, value] of Object.entries(values)) {
@@ -268,6 +365,19 @@ export function reconstructRecordPayload(
 		}
 		const compound = (payload[target.parent] ??= {}) as IDataObject;
 		compound[target.part] = value as IDataObject[string];
+	}
+	for (const field of writableFields(object)) {
+		if (field.type !== 'RICH_TEXT') continue;
+		const richText = payload[field.apiName];
+		if (
+			richText !== null &&
+			typeof richText === 'object' &&
+			!Array.isArray(richText) &&
+			Object.prototype.hasOwnProperty.call(richText, 'blocknote') &&
+			!Object.prototype.hasOwnProperty.call(richText, 'markdown')
+		) {
+			(richText as IDataObject).markdown = null;
+		}
 	}
 	return payload;
 }

@@ -71,6 +71,7 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain('finally');
 		expect(liveTest).toContain('cleanupOwnedLifecycleFixture');
 		expect(liveTest).toContain('cleanupOwnedPersonFixture');
+		expect(liveTest).toContain('cleanupOpportunityLifecycle');
 		expect(liveTest).toContain(
 			'Compiled fixed Person Create/Get/Get Many/Update qualification passed.',
 		);
@@ -81,6 +82,34 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain("lifecycleService.delete('company', match.id)");
 		expect(liveTest).toContain('Disposable record cleanup could not verify absence.');
 		expect(liveTest).toContain('Disposable Person cleanup could not verify absence.');
+		expect(liveTest).toContain('Opportunity cleanup could not verify absence.');
+		expect(liveTest).toContain('function hasOwnedRecordId(record)');
+		expect(liveTest).toContain(
+			'!hasOwnedRecordId(record) || record.name !== opportunityCompanyName',
+		);
+		expect(liveTest).toContain('!hasOwnedRecordId(record) || record.name !== name');
+		expect(liveTest).toContain("field.relation?.type === 'MANY_TO_ONE'");
+		expect(liveTest).toContain('function isQualifiedDirectRelation');
+		expect(liveTest).toContain('field.relation.source.objectApiNameSingular === objectApiName');
+		expect(liveTest).toContain('field.relation.source.fieldApiName === fieldApiName');
+		expect(liveTest).toContain('field.relation.target.objectApiNameSingular === targetApiName');
+		expect(liveTest).toContain('fetched.name !== opportunityName');
+		expect(liveTest).toContain('fetched.title !== title');
+		expect(liveTest).toContain('companyId: opportunityCompanyId');
+		expect(liveTest).toContain('pointOfContactId: opportunityPersonId');
+		expect(liveTest).toContain(
+			'Compiled fixed Opportunity relation-ID lifecycle qualification passed.',
+		);
+		expect(liveTest).toContain('runOwnedTitleLifecycle');
+		expect(liveTest).toContain("apiName: 'task'");
+		expect(liveTest).toContain("apiName: 'note'");
+		expect(liveTest).toContain('assigneeId: workspaceMemberId');
+		expect(liveTest).toContain('bodyV2__markdown');
+		expect(liveTest).toContain('Fixed-resource cleanup could not verify absence.');
+		expect(liveTest).toContain(
+			'Compiled fixed Task rich-text/relation lifecycle qualification passed.',
+		);
+		expect(liveTest).toContain('Compiled fixed Note rich-text lifecycle qualification passed.');
 		expect(liveTest).toContain('crypto.randomUUID()');
 		expect(liveTest).toContain("filter: 'deletedAt[is]:NULL'");
 		expect(liveTest).toContain("orderBy: 'createdAt[AscNullsFirst]'");
