@@ -74,6 +74,63 @@ export function requireLocalApiKey(env) {
 	return env.TWENTY_API_KEY;
 }
 
+export function assertLoopbackTwentyUrl(value) {
+	let url;
+	try {
+		url = new URL(value);
+	} catch {
+		throw new Error('Live mutation qualification requires an absolute loopback Twenty URL');
+	}
+	if (
+		!['http:', 'https:'].includes(url.protocol) ||
+		!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ||
+		url.username ||
+		url.password ||
+		url.search ||
+		url.hash
+	) {
+		throw new Error('Live mutation qualification is restricted to a loopback Twenty URL');
+	}
+	return url.toString();
+}
+
+export async function cleanupOwnedCustomSchema({
+	cleanupRecords,
+	findOwnedObject,
+	cleanupField,
+	cleanupObject,
+	verifyAbsent,
+}) {
+	try {
+		await cleanupRecords();
+	} catch {}
+
+	let ownedObject;
+	try {
+		ownedObject = await findOwnedObject();
+	} catch {}
+	if (ownedObject !== undefined) {
+		try {
+			await cleanupField(ownedObject);
+		} catch {}
+	}
+
+	ownedObject = undefined;
+	try {
+		ownedObject = await findOwnedObject();
+	} catch {}
+	if (ownedObject !== undefined) {
+		try {
+			await cleanupObject(ownedObject);
+		} catch {}
+	}
+
+	try {
+		if (await verifyAbsent()) return;
+	} catch {}
+	throw new Error('Custom schema lifecycle cleanup failed.');
+}
+
 export function assertPinnedCompose(composeText) {
 	if (!composeText.includes(TWENTY_IMAGE)) throw new Error('Twenty v2.9.0 digest pin is missing');
 	if (/image:\s*[^\n]*(?:^|[:/@-])latest(?:\s|$)/im.test(composeText)) {

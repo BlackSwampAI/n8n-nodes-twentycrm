@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	assertPinnedCompose,
+	assertLoopbackTwentyUrl,
+	cleanupOwnedCustomSchema,
 	DOCKER_HOST_ALIAS,
 	localWebhookTarget,
 	parseEnv,
@@ -141,13 +143,85 @@ describe('local Twenty Compose harness', () => {
 		expect(liveTest).toContain("filter: 'deletedAt[is]:NULL'");
 		expect(liveTest).toContain("orderBy: 'createdAt[AscNullsFirst]'");
 		expect(liveTest).toContain("recordService.get('person'");
-		expect(liveTest).not.toMatch(/\bmutation\b/);
+		expect(liveTest).toContain('CreateOneObjectInput!');
+		expect(liveTest).toContain('CreateOneFieldMetadataInput!');
+		expect(liveTest).toContain('DeleteOneFieldInput!');
+		expect(liveTest).toContain('DeleteOneObjectInput!');
+		expect(liveTest).toContain('runCustomSchemaLifecycle');
+		expect(liveTest).toContain("type: 'TEXT'");
+		expect(liveTest).toContain('createRecordService(liveContext');
+		expect(liveTest).toContain('Custom record cleanup ownership verification failed.');
+		expect(liveTest).toContain('ownsObject(object) && !object.fields.some(ownsField)');
+		expect(liveTest.lastIndexOf('recordService.delete(objectApiName')).toBeLessThan(
+			liveTest.lastIndexOf('DELETE_CUSTOM_FIELD_MUTATION'),
+		);
+		expect(liveTest.lastIndexOf('DELETE_CUSTOM_FIELD_MUTATION')).toBeLessThan(
+			liveTest.lastIndexOf('DELETE_CUSTOM_OBJECT_MUTATION'),
+		);
 		expect(liveTest).toContain('AbortSignal.timeout(PROBE_TIMEOUT_MS)');
 		expect(liveTest).toContain('const PROBE_TIMEOUT_MS = 15_000');
 	});
 });
 
 describe('local Twenty harness helpers', () => {
+	it('continues owned schema cleanup after phase failures and trusts final absence', async () => {
+		const phases = [];
+		let discovery = 0;
+		await expect(
+			cleanupOwnedCustomSchema({
+				cleanupRecords: async () => {
+					phases.push('records');
+					throw new Error('synthetic record cleanup failure');
+				},
+				findOwnedObject: async () => {
+					discovery++;
+					return discovery < 3 ? { exactOwned: true } : undefined;
+				},
+				cleanupField: async () => {
+					phases.push('field');
+					throw new Error('synthetic response-shape failure');
+				},
+				cleanupObject: async () => {
+					phases.push('object');
+					throw new Error('synthetic response-shape failure');
+				},
+				verifyAbsent: async () => true,
+			}),
+		).resolves.toBeUndefined();
+		expect(phases).toEqual(['records', 'field', 'object']);
+	});
+
+	it('does not mutate metadata without proven ownership and fails if absence is unverified', async () => {
+		const phases = [];
+		await expect(
+			cleanupOwnedCustomSchema({
+				cleanupRecords: async () => phases.push('records'),
+				findOwnedObject: async () => {
+					throw new Error('synthetic discovery failure');
+				},
+				cleanupField: async () => phases.push('field'),
+				cleanupObject: async () => phases.push('object'),
+				verifyAbsent: async () => {
+					throw new Error('synthetic absence failure');
+				},
+			}),
+		).rejects.toThrow('Custom schema lifecycle cleanup failed.');
+		expect(phases).toEqual(['records']);
+	});
+
+	it('restricts mutation qualification to loopback Twenty URLs', () => {
+		expect(assertLoopbackTwentyUrl('http://127.0.0.1:3020')).toBe('http://127.0.0.1:3020/');
+		expect(assertLoopbackTwentyUrl('http://localhost:3020')).toBe('http://localhost:3020/');
+		expect(assertLoopbackTwentyUrl('http://[::1]:3020')).toBe('http://[::1]:3020/');
+		for (const value of [
+			'https://twenty.example.test',
+			'http://127.0.0.1:3020?unsafe=true',
+			'http://user:secret@localhost:3020',
+			'not-a-url',
+		]) {
+			expect(() => assertLoopbackTwentyUrl(value)).toThrow(/loopback Twenty URL/);
+		}
+	});
 	it('parses local environment values without evaluating content', () => {
 		expect(parseEnv('# comment\nTWENTY_PORT=3020\nSAMPLE_VALUE=value=with=equals\n')).toEqual({
 			TWENTY_PORT: '3020',
