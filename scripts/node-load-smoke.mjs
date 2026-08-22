@@ -5,9 +5,18 @@ const require = createRequire(import.meta.url);
 const modulePath = resolve(import.meta.dirname, '../dist/nodes/Twenty/Twenty.node.js');
 const { Twenty } = require(modulePath);
 const node = new Twenty();
+const triggerPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/TwentyTrigger.node.js');
+const { TwentyTrigger } = require(triggerPath);
+const trigger = new TwentyTrigger();
 const credentialPath = resolve(import.meta.dirname, '../dist/credentials/TwentyApi.credentials.js');
 const { TwentyApi } = require(credentialPath);
 const credential = new TwentyApi();
+const webhookCredentialPath = resolve(
+	import.meta.dirname,
+	'../dist/credentials/TwentyWebhookApi.credentials.js',
+);
+const { TwentyWebhookApi } = require(webhookCredentialPath);
+const webhookCredential = new TwentyWebhookApi();
 const requestPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/request.js');
 const { twentyApiRequest } = require(requestPath);
 const errorPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/errors.js');
@@ -26,6 +35,14 @@ if (credential.name !== 'twentyApi' || credential.authenticate?.type !== 'generi
 	throw new Error('Compiled Twenty API credential did not load as expected');
 }
 if (
+	trigger.description.displayName !== 'Twenty CRM Trigger' ||
+	trigger.description.name !== 'twentyTrigger' ||
+	typeof trigger.webhook !== 'function' ||
+	webhookCredential.name !== 'twentyWebhookApi'
+) {
+	throw new Error('Compiled Twenty CRM Trigger or webhook credential did not load as expected');
+}
+if (
 	node.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest' ||
 	typeof node.methods?.credentialTest?.twentyApiCredentialTest !== 'function' ||
 	typeof twentyApiRequest !== 'function' ||
@@ -40,5 +57,5 @@ if (
 }
 
 console.log(
-	'Compiled Twenty CRM node, credential test, and resilient authenticated transport loaded successfully',
+	'Compiled Twenty CRM action, trigger, credentials, and resilient authenticated transport loaded successfully',
 );
