@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	assertPinnedCompose,
+	DOCKER_HOST_ALIAS,
+	localWebhookTarget,
 	parseEnv,
 	redactHarnessText,
 	requireLocalApiKey,
@@ -19,6 +21,10 @@ const compose = readFileSync(
 	'utf8',
 );
 const liveTest = readFileSync(resolve(import.meta.dirname, 'twenty-live-test.mjs'), 'utf8');
+const webhookQualification = readFileSync(
+	resolve(import.meta.dirname, 'twenty-webhook-qualify.mjs'),
+	'utf8',
+);
 const packageJson = JSON.parse(
 	readFileSync(resolve(import.meta.dirname, '../package.json'), 'utf8'),
 ) as { scripts: Record<string, string> };
@@ -42,6 +48,15 @@ describe('local Twenty Compose harness', () => {
 		expect(compose).toContain('server-local-data:');
 	});
 
+	it('adds the supported local outbound setting and Linux host bridge only to the worker', () => {
+		expect(compose.match(/OUTBOUND_HTTP_SAFE_MODE_ENABLED/g)).toHaveLength(1);
+		expect(compose).toContain("OUTBOUND_HTTP_SAFE_MODE_ENABLED: 'false'");
+		expect(compose).toContain(`'${DOCKER_HOST_ALIAS}:host-gateway'`);
+		expect(compose.indexOf('OUTBOUND_HTTP_SAFE_MODE_ENABLED')).toBeGreaterThan(
+			compose.indexOf('  worker:'),
+		);
+	});
+
 	it('exposes explicit lifecycle commands while keeping live qualification opt-in', () => {
 		expect(packageJson.scripts).toMatchObject({
 			'twenty:start': 'node scripts/twenty-harness.mjs start',
@@ -49,8 +64,18 @@ describe('local Twenty Compose harness', () => {
 			'twenty:stop': 'node scripts/twenty-harness.mjs stop',
 			'twenty:clean': 'node scripts/twenty-harness.mjs clean',
 			'test:integration': 'npm run build && node scripts/twenty-live-test.mjs',
+			'test:webhook-bridge': 'node scripts/twenty-webhook-qualify.mjs',
 		});
 		expect(packageJson.scripts.test).toBe('vitest run');
+	});
+
+	it('keeps native webhook qualification local, bounded, and sanitized', () => {
+		expect(webhookQualification).toContain('localWebhookTarget(env.N8N_WEBHOOK_URL)');
+		expect(webhookQualification).toContain("'host.docker.internal'");
+		expect(webhookQualification).toContain('timeout: 10_000');
+		expect(webhookQualification).toContain("stdio: 'ignore'");
+		expect(webhookQualification).not.toContain('console.log(target');
+		expect(webhookQualification).not.toContain('console.log(env');
 	});
 
 	it('qualifies Core and Metadata GraphQL independently with read-only queries', () => {
@@ -129,17 +154,42 @@ describe('local Twenty harness helpers', () => {
 	});
 
 	it('redacts every configured secret and Bearer value from retained logs', () => {
+		const localWebhook = 'http://localhost:5678/webhook/synthetic-private-path';
+		const containerWebhook = 'http://host.docker.internal:5678/webhook/synthetic-private-path';
 		const output = redactHarnessText(
-			'password-a Authorization: Bearer api-key TWENTY_API_KEY=api-key private-safe',
-			['password-a', 'api-key'],
+			`password-a Authorization: Bearer api-key TWENTY_API_KEY=api-key ${localWebhook} ${containerWebhook} private-safe`,
+			['password-a', 'api-key', localWebhook, containerWebhook],
 		);
 		expect(output).not.toContain('password-a');
 		expect(output).not.toContain('api-key');
+		expect(output).not.toContain('synthetic-private-path');
 		expect(output).toContain('[REDACTED]');
 	});
 
 	it('requires a local-only API key with actionable setup guidance', () => {
 		expect(() => requireLocalApiKey({})).toThrow('Create one in Settings > APIs & Webhooks');
+	});
+
+	it('rewrites only explicit localhost production webhook URLs for the Docker worker', () => {
+		expect(localWebhookTarget('http://localhost:5678/webhook/synthetic-path')).toEqual({
+			containerUrl: 'http://host.docker.internal:5678/webhook/synthetic-path',
+			port: 5678,
+		});
+		expect(localWebhookTarget('http://127.0.0.1:5678/webhook/synthetic-path').containerUrl).toBe(
+			'http://host.docker.internal:5678/webhook/synthetic-path',
+		);
+	});
+
+	it.each([
+		'https://localhost:5678/webhook/synthetic',
+		'http://example.com:5678/webhook/synthetic',
+		'http://localhost/webhook/synthetic',
+		'http://localhost:5678/webhook-test/synthetic',
+		'http://user:secret@localhost:5678/webhook/synthetic',
+		'http://localhost:5678/webhook/synthetic#fragment',
+		'not-a-url',
+	])('rejects unsafe or non-production local webhook targets', (value) => {
+		expect(() => localWebhookTarget(value)).toThrow(/N8N_WEBHOOK_URL/);
 	});
 
 	it('writes new and overwritten retained logs with mode 0600', () => {

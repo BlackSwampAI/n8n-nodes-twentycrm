@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 
 export const TWENTY_IMAGE =
 	'twentycrm/twenty:v2.9.0@sha256:0afdba1494ea50bad6eb278a20ae35933317483f23501157c2ed866b74d4bc4a';
+export const DOCKER_HOST_ALIAS = 'host.docker.internal';
 
 export function parseEnv(text) {
 	const values = {};
@@ -31,6 +32,7 @@ export function createLocalEnv(path) {
 		`APP_SECRET=${secret()}`,
 		'',
 		'# Add TWENTY_API_KEY after creating it in the local Twenty UI.',
+		'# Add N8N_WEBHOOK_URL when qualifying native local webhook delivery.',
 		'',
 	].join('\n');
 	mkdirSync(dirname(path), { recursive: true });
@@ -81,4 +83,35 @@ export function assertPinnedCompose(composeText) {
 		if (!composeText.includes(`  ${service}`))
 			throw new Error(`Compose service ${service} is missing`);
 	}
+	if (!composeText.includes("OUTBOUND_HTTP_SAFE_MODE_ENABLED: 'false'")) {
+		throw new Error('The local worker outbound-network qualification setting is missing');
+	}
+	if (!composeText.includes(`'${DOCKER_HOST_ALIAS}:host-gateway'`)) {
+		throw new Error('The deterministic Docker host bridge is missing');
+	}
+}
+
+export function localWebhookTarget(value) {
+	let url;
+	try {
+		url = new URL(value);
+	} catch {
+		throw new Error('N8N_WEBHOOK_URL must be an absolute local HTTP URL');
+	}
+	if (
+		url.protocol !== 'http:' ||
+		!['localhost', '127.0.0.1'].includes(url.hostname) ||
+		url.username ||
+		url.password ||
+		url.hash ||
+		!url.port ||
+		!url.pathname.startsWith('/webhook/')
+	) {
+		throw new Error(
+			'N8N_WEBHOOK_URL must be a localhost production webhook URL with an explicit port',
+		);
+	}
+	const containerUrl = new URL(url.toString());
+	containerUrl.hostname = DOCKER_HOST_ALIAS;
+	return { containerUrl: containerUrl.toString(), port: Number(url.port) };
 }

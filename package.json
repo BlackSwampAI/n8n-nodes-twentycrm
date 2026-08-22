@@ -38,6 +38,7 @@
 		"twenty:clean": "node scripts/twenty-harness.mjs clean",
 		"twenty:logs": "node scripts/twenty-harness.mjs logs",
 		"test:integration": "npm run build && node scripts/twenty-live-test.mjs",
+		"test:webhook-bridge": "node scripts/twenty-webhook-qualify.mjs",
 		"package:check": "node scripts/package-check.mjs",
 		"smoke:load": "node scripts/node-load-smoke.mjs",
 		"test:load": "npm run smoke:load",

@@ -49,6 +49,26 @@ npm run twenty:clean  # stop containers and delete this Compose project's volume
 
 `twenty:clean` is the full reset. It targets only the fixed `n8n-twentycrm-integration` Compose project declared in this repository.
 
+## Native webhook bridge qualification
+
+Twenty v2.9 dispatches webhooks from the worker service. This local-only Compose configuration maps `host.docker.internal` to Docker's Linux `host-gateway` for that worker. It also sets the supported `OUTBOUND_HTTP_SAFE_MODE_ENABLED=false` worker setting because Twenty's default safe mode rejects private/internal destinations. This flag disables private-network protection for all outbound worker requests, so it is appropriate only for this isolated disposable harness and must never be copied to a production deployment.
+
+Start n8n yourself and use the trigger's production webhook URL. Add that localhost URL to the ignored `integration/twenty/.env` without placing it in a shell command or log:
+
+```text
+N8N_WEBHOOK_URL=http://localhost:5678/webhook/<n8n-generated-path>
+```
+
+Then run:
+
+```sh
+npm run test:webhook-bridge
+```
+
+The command accepts only an explicit-port `http://localhost/...` or `http://127.0.0.1/...` production webhook path, never a remote host or test-webhook URL. It checks TCP reachability from the actual Twenty worker with bounded timeouts and prints no URL, path, credentials, or payloads.
+
+For Twenty's webhook form, replace only the displayed URL's host: `http://localhost:5678/webhook/...` becomes `http://host.docker.internal:5678/webhook/...`. Enter a strong shared secret despite Twenty labeling it optional, and save the same value in n8n's password-masked Twenty Webhook API credential. Activate the n8n workflow, create the webhook manually in Twenty, then create or update a uniquely owned disposable local record to prove native delivery. Confirm the matching n8n production execution in the UI and remove the disposable record/webhook afterward. The harness does not automate this boundary because doing so would require private webhook-management or n8n execution APIs.
+
 ## Failure logs
 
 If startup does not become healthy, the harness writes sanitized container output to `integration/twenty/artifacts/twenty-failure.log` with mode `0600`. Generate the same ignored log explicitly with `npm run twenty:logs`. Known local secrets, API keys, and Bearer values are replaced before the file is written. Review logs before sharing because third-party application output can change, and never share workspace data.
