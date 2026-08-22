@@ -19,12 +19,12 @@ if (!existsSync(envPath)) {
 } else {
 	try {
 		const env = readEnv(envPath);
-		if (!env.N8N_WEBHOOK_URL) {
+		if (!env.TWENTY_WEBHOOK_URL) {
 			throw new Error(
-				'Add the local n8n production webhook URL as N8N_WEBHOOK_URL in integration/twenty/.env.',
+				'Add the local n8n production webhook URL as TWENTY_WEBHOOK_URL in integration/twenty/.env.',
 			);
 		}
-		const target = localWebhookTarget(env.N8N_WEBHOOK_URL);
+		const target = localWebhookTarget(env.TWENTY_WEBHOOK_URL);
 		const probe = spawnSync(
 			'docker',
 			[

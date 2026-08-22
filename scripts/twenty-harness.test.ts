@@ -70,7 +70,9 @@ describe('local Twenty Compose harness', () => {
 	});
 
 	it('keeps native webhook qualification local, bounded, and sanitized', () => {
-		expect(webhookQualification).toContain('localWebhookTarget(env.N8N_WEBHOOK_URL)');
+		expect(webhookQualification).toContain('localWebhookTarget(env.TWENTY_WEBHOOK_URL)');
+		expect(webhookQualification).toContain('as TWENTY_WEBHOOK_URL');
+		expect(webhookQualification).not.toContain('N8N_WEBHOOK_URL');
 		expect(webhookQualification).toContain("'host.docker.internal'");
 		expect(webhookQualification).toContain('timeout: 10_000');
 		expect(webhookQualification).toContain("stdio: 'ignore'");
@@ -189,7 +191,7 @@ describe('local Twenty harness helpers', () => {
 		'http://localhost:5678/webhook/synthetic#fragment',
 		'not-a-url',
 	])('rejects unsafe or non-production local webhook targets', (value) => {
-		expect(() => localWebhookTarget(value)).toThrow(/N8N_WEBHOOK_URL/);
+		expect(() => localWebhookTarget(value)).toThrow(/TWENTY_WEBHOOK_URL/);
 	});
 
 	it('writes new and overwritten retained logs with mode 0600', () => {

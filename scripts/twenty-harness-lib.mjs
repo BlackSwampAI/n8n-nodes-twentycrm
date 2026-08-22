@@ -32,7 +32,7 @@ export function createLocalEnv(path) {
 		`APP_SECRET=${secret()}`,
 		'',
 		'# Add TWENTY_API_KEY after creating it in the local Twenty UI.',
-		'# Add N8N_WEBHOOK_URL when qualifying native local webhook delivery.',
+		'# Add TWENTY_WEBHOOK_URL when qualifying native local webhook delivery.',
 		'',
 	].join('\n');
 	mkdirSync(dirname(path), { recursive: true });
@@ -96,7 +96,7 @@ export function localWebhookTarget(value) {
 	try {
 		url = new URL(value);
 	} catch {
-		throw new Error('N8N_WEBHOOK_URL must be an absolute local HTTP URL');
+		throw new Error('TWENTY_WEBHOOK_URL must be an absolute local HTTP URL');
 	}
 	if (
 		url.protocol !== 'http:' ||
@@ -108,7 +108,7 @@ export function localWebhookTarget(value) {
 		!url.pathname.startsWith('/webhook/')
 	) {
 		throw new Error(
-			'N8N_WEBHOOK_URL must be a localhost production webhook URL with an explicit port',
+			'TWENTY_WEBHOOK_URL must be a localhost production webhook URL with an explicit port',
 		);
 	}
 	const containerUrl = new URL(url.toString());

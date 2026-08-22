@@ -48,11 +48,11 @@ function retainLogs() {
 		env.ENCRYPTION_KEY,
 		env.APP_SECRET,
 		env.TWENTY_API_KEY,
-		env.N8N_WEBHOOK_URL,
+		env.TWENTY_WEBHOOK_URL,
 	];
 	try {
-		if (env.N8N_WEBHOOK_URL) {
-			secrets.push(localWebhookTarget(env.N8N_WEBHOOK_URL).containerUrl);
+		if (env.TWENTY_WEBHOOK_URL) {
+			secrets.push(localWebhookTarget(env.TWENTY_WEBHOOK_URL).containerUrl);
 		}
 	} catch {
 		// Invalid local webhook configuration is reported by the qualification command.

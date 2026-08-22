@@ -56,7 +56,7 @@ Twenty v2.9 dispatches webhooks from the worker service. This local-only Compose
 Start n8n yourself and use the trigger's production webhook URL. Add that localhost URL to the ignored `integration/twenty/.env` without placing it in a shell command or log:
 
 ```text
-N8N_WEBHOOK_URL=http://localhost:5678/webhook/<n8n-generated-path>
+TWENTY_WEBHOOK_URL=http://localhost:5678/webhook/<n8n-generated-path>
 ```
 
 Then run:
