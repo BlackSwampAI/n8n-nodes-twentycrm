@@ -2,7 +2,13 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
-import { readEnv, requireLocalApiKey, validateGraphqlPayload } from './twenty-harness-lib.mjs';
+import {
+	assertLoopbackTwentyUrl,
+	cleanupOwnedCustomSchema,
+	readEnv,
+	requireLocalApiKey,
+	validateGraphqlPayload,
+} from './twenty-harness-lib.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const envPath = resolve(root, 'integration/twenty/.env');
@@ -23,6 +29,7 @@ const { reconstructRecordPayload } = require(
 	resolve(root, 'dist/nodes/Twenty/shared/fieldMapping.js'),
 );
 const baseUrl = `http://127.0.0.1:${env.TWENTY_PORT || '3020'}`;
+assertLoopbackTwentyUrl(baseUrl);
 const urls = deriveTwentyApiUrls(baseUrl);
 const PROBE_TIMEOUT_MS = 15_000;
 
@@ -838,3 +845,242 @@ await runOwnedTitleLifecycle({
 	verify: (record, values) => record.bodyV2?.markdown === values.bodyV2__markdown,
 });
 console.log('Compiled fixed Note rich-text lifecycle qualification passed.');
+
+const CREATE_CUSTOM_OBJECT_MUTATION = `mutation HarnessCreateObject($input: CreateOneObjectInput!) {
+  createOneObject(input: $input) { id nameSingular namePlural labelSingular labelPlural isCustom }
+}`;
+const CREATE_CUSTOM_FIELD_MUTATION = `mutation HarnessCreateField($input: CreateOneFieldMetadataInput!) {
+  createOneField(input: $input) { id name label type isCustom }
+}`;
+const DELETE_CUSTOM_FIELD_MUTATION = `mutation HarnessDeleteField($input: DeleteOneFieldInput!) {
+  deleteOneField(input: $input) { id }
+}`;
+const DELETE_CUSTOM_OBJECT_MUTATION = `mutation HarnessDeleteObject($input: DeleteOneObjectInput!) {
+  deleteOneObject(input: $input) { id }
+}`;
+const SCHEMA_POLL_ATTEMPTS = 30;
+
+async function metadataRequest(query, variables, dataCheck, phase) {
+	let response;
+	try {
+		response = await fetch(urls.metadataGraphql, {
+			method: 'POST',
+			headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+			body: JSON.stringify({ query, variables }),
+			signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+		});
+	} catch {
+		throw new Error(`${phase} request failed; confirm the local stack is healthy.`);
+	}
+	if (!response.ok) throw new Error(`${phase} returned HTTP ${response.status}.`);
+	let payload;
+	try {
+		payload = await response.json();
+	} catch {
+		throw new Error(`${phase} returned invalid JSON.`);
+	}
+	validateGraphqlPayload(phase, payload, dataCheck);
+	return payload.data;
+}
+
+async function discoverAllObjects() {
+	const objects = [];
+	const cursors = new Set();
+	let after = null;
+	for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
+		const data = await metadataRequest(
+			OBJECT_METADATA_QUERY,
+			{ after },
+			(value) =>
+				Array.isArray(value?.objects?.edges) &&
+				typeof value?.objects?.pageInfo?.hasNextPage === 'boolean',
+			'Custom metadata discovery',
+		);
+		for (const edge of data.objects.edges) objects.push(normalizeTwentyObject(edge?.node));
+		if (!data.objects.pageInfo.hasNextPage) return objects;
+		const cursor = data.objects.pageInfo.endCursor;
+		if (typeof cursor !== 'string' || !cursor || cursors.has(cursor))
+			throw new Error('Custom metadata discovery pagination did not provide a new cursor.');
+		cursors.add(cursor);
+		after = cursor;
+	}
+	throw new Error('Custom metadata discovery exceeded the safety limit.');
+}
+
+const waitForSchema = () => new Promise((resolveWait) => setTimeout(resolveWait, 1_000));
+
+async function pollOwnedObject(apiName, predicate) {
+	for (let attempt = 0; attempt < SCHEMA_POLL_ATTEMPTS; attempt++) {
+		const object = (await discoverAllObjects()).find(
+			(candidate) => candidate.apiNameSingular === apiName,
+		);
+		if (predicate(object)) return object;
+		if (attempt + 1 < SCHEMA_POLL_ATTEMPTS) await waitForSchema();
+	}
+	throw new Error('Custom metadata did not reach the expected state within the safety limit.');
+}
+
+async function runCustomSchemaLifecycle() {
+	const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
+	const objectApiName = `n8nCustom${suffix}`;
+	const objectPluralApiName = `n8nCustoms${suffix}`;
+	const objectLabel = `N8n Custom ${suffix}`;
+	const objectPluralLabel = `N8n Customs ${suffix}`;
+	const fieldApiName = `qualifiedValue${suffix}`;
+	const fieldLabel = `Qualified Value ${suffix}`;
+	const initialValue = `initial-${crypto.randomUUID()}`;
+	const updatedValue = `updated-${crypto.randomUUID()}`;
+	let objectId;
+	let recordId;
+	let customObject;
+	let recordService;
+	let lifecycleFailure;
+
+	const ownsObject = (object) =>
+		object?.isCustom === true &&
+		object.apiNameSingular === objectApiName &&
+		object.apiNamePlural === objectPluralApiName &&
+		object.labelSingular === objectLabel &&
+		object.labelPlural === objectPluralLabel;
+	const ownsField = (field) =>
+		field?.isCustom === true && field.apiName === fieldApiName && field.label === fieldLabel;
+
+	try {
+		const createdObject = await metadataRequest(
+			CREATE_CUSTOM_OBJECT_MUTATION,
+			{
+				input: {
+					object: {
+						nameSingular: objectApiName,
+						namePlural: objectPluralApiName,
+						labelSingular: objectLabel,
+						labelPlural: objectPluralLabel,
+					},
+				},
+			},
+			(data) =>
+				typeof data?.createOneObject?.id === 'string' &&
+				data.createOneObject.nameSingular === objectApiName &&
+				data.createOneObject.namePlural === objectPluralApiName &&
+				data.createOneObject.labelSingular === objectLabel &&
+				data.createOneObject.labelPlural === objectPluralLabel &&
+				data.createOneObject.isCustom === true,
+			'Custom object creation',
+		);
+		objectId = createdObject.createOneObject.id;
+
+		await metadataRequest(
+			CREATE_CUSTOM_FIELD_MUTATION,
+			{
+				input: {
+					field: {
+						objectMetadataId: objectId,
+						type: 'TEXT',
+						name: fieldApiName,
+						label: fieldLabel,
+						isNullable: true,
+					},
+				},
+			},
+			(data) =>
+				typeof data?.createOneField?.id === 'string' &&
+				data.createOneField.name === fieldApiName &&
+				data.createOneField.label === fieldLabel &&
+				data.createOneField.type === 'TEXT' &&
+				data.createOneField.isCustom === true,
+			'Custom field creation',
+		);
+		customObject = await pollOwnedObject(
+			objectApiName,
+			(object) => ownsObject(object) && object.fields.some(ownsField),
+		);
+		recordService = createRecordService(liveContext, {
+			getObject: async () => customObject,
+			getObjects: async () => [customObject],
+		});
+		const created = await recordService.create(objectApiName, {
+			name: objectLabel,
+			[fieldApiName]: initialValue,
+		});
+		if (typeof created.id !== 'string' || !created.id)
+			throw new Error('Custom record creation failed.');
+		recordId = created.id;
+		const fetched = await recordService.get(objectApiName, recordId);
+		if (fetched[fieldApiName] !== initialValue) throw new Error('Custom record Get failed.');
+		const listed = await recordService.getMany(objectApiName, {
+			returnAll: true,
+			filter: `${fieldApiName}[eq]:${JSON.stringify(initialValue)}`,
+		});
+		if (!listed.some((record) => record.id === recordId && record[fieldApiName] === initialValue))
+			throw new Error('Custom record Get Many failed.');
+		const updated = await recordService.update(objectApiName, recordId, {
+			[fieldApiName]: updatedValue,
+		});
+		if (updated[fieldApiName] !== updatedValue) throw new Error('Custom record Update failed.');
+		await recordService.delete(objectApiName, recordId);
+		recordId = undefined;
+		const absent = await recordService.getMany(objectApiName, {
+			returnAll: true,
+			filter: `${fieldApiName}[eq]:${JSON.stringify(updatedValue)}`,
+		});
+		if (absent.length !== 0) throw new Error('Custom record deletion could not verify absence.');
+	} catch (error) {
+		lifecycleFailure = error;
+	} finally {
+		await cleanupOwnedCustomSchema({
+			cleanupRecords: async () => {
+				if (recordService) {
+					const ownedRecords = await recordService.getMany(objectApiName, {
+						returnAll: true,
+						filter: `${fieldApiName}[eq]:${JSON.stringify(updatedValue)}`,
+					});
+					const initialRecords = await recordService.getMany(objectApiName, {
+						returnAll: true,
+						filter: `${fieldApiName}[eq]:${JSON.stringify(initialValue)}`,
+					});
+					for (const record of [...ownedRecords, ...initialRecords]) {
+						if (
+							typeof record.id !== 'string' ||
+							!record.id ||
+							![initialValue, updatedValue].includes(record[fieldApiName]) ||
+							record.name !== objectLabel
+						)
+							throw new Error('Custom record cleanup ownership verification failed.');
+						await recordService.delete(objectApiName, record.id);
+					}
+				}
+			},
+			findOwnedObject: async () => (await discoverAllObjects()).find(ownsObject),
+			cleanupField: async (owned) => {
+				const ownedField = owned.fields.find(ownsField);
+				if (!ownedField) return;
+				await metadataRequest(
+					DELETE_CUSTOM_FIELD_MUTATION,
+					{ input: { id: ownedField.id } },
+					(data) => data?.deleteOneField?.id === ownedField.id,
+					'Custom field cleanup',
+				);
+				await pollOwnedObject(
+					objectApiName,
+					(object) => ownsObject(object) && !object.fields.some(ownsField),
+				);
+			},
+			cleanupObject: async (owned) => {
+				await metadataRequest(
+					DELETE_CUSTOM_OBJECT_MUTATION,
+					{ input: { id: owned.id } },
+					(data) => data?.deleteOneObject?.id === owned.id,
+					'Custom object cleanup',
+				);
+			},
+			verifyAbsent: async () => {
+				await pollOwnedObject(objectApiName, (object) => object === undefined);
+				return true;
+			},
+		});
+	}
+	if (lifecycleFailure) throw lifecycleFailure;
+	console.log('Compiled custom schema and generic Record lifecycle qualification passed.');
+}
+
+await runCustomSchemaLifecycle();

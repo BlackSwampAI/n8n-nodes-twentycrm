@@ -1,6 +1,6 @@
 # Local Twenty integration harness
 
-This opt-in harness runs a disposable Twenty v2.9.0 instance for authenticated, read-only integration qualification. It follows Twenty's official four-service topology: server, worker, PostgreSQL, and Redis.
+This opt-in harness runs a disposable Twenty v2.9.0 instance for authenticated integration qualification. It follows Twenty's official four-service topology: server, worker, PostgreSQL, and Redis.
 
 The server and worker use the immutable image `twentycrm/twenty:v2.9.0@sha256:0afdba1494ea50bad6eb278a20ae35933317483f23501157c2ed866b74d4bc4a`. Supporting services are explicitly pinned to `postgres:16.10-alpine` and `redis:7.4.6-alpine`; the Compose file contains no `latest` reference. Only the Twenty server is published, on `127.0.0.1:3020` by default.
 
@@ -31,13 +31,19 @@ Open `http://localhost:3020`, complete Twenty's normal browser onboarding, then 
 4. Copy the key when Twenty displays it; it is shown once.
 5. Add it to the ignored `integration/twenty/.env` as `TWENTY_API_KEY=...` using a text editor. Do not place the key in a shell command, commit, issue, or log.
 
-Run the two independent read-only probes:
+The built-in lifecycle needs the corresponding object read/write permissions. The custom object/field qualification also needs the API-key role's **Data Model** settings permission. Use a disposable local role and do not grant this permission to a production key merely to run the harness.
+
+Run the integration qualification:
 
 ```sh
 npm run test:integration
 ```
 
-The test sends Bearer-authenticated GraphQL requests to `/graphql` and `/metadata`, then exercises the compiled shared Record service against Core REST. Core GraphQL validates a bounded connection shape. Metadata GraphQL runs the compiled paginated discovery query and normalizer. Core REST performs bounded read qualification followed by uniquely owned disposable Company and Person Create/Get/Get Many/Update/Delete lifecycles. The lifecycles pass scalar, ADDRESS, and FULL_NAME values through the compiled field-mapping adapter used by the fixed resources. Cleanup runs in `finally`, and a successful run verifies both fixtures are absent. Each request has a 15-second timeout. The test rejects HTTP, timeout/network, GraphQL, malformed-envelope, cursor-loop, and cleanup errors and reports only sanitized phases without printing names, identifiers, record values, counts, raw payloads, or the API key.
+The test sends Bearer-authenticated GraphQL requests to `/graphql` and `/metadata`, then exercises the compiled shared Record service against Core REST. Core GraphQL validates a bounded connection shape. Metadata GraphQL runs the compiled paginated discovery query and normalizer. Core REST performs bounded read qualification followed by the uniquely owned disposable Company, Person, Opportunity, Task, and Note lifecycles.
+
+The same opt-in command also uses Twenty v2.9's public authenticated Metadata GraphQL mutations to create one uniquely named custom object and one writable custom `TEXT` field. It rediscovers them through the compiled metadata normalizer, performs generic Record Create/Get/Get Many/Update/Delete, and deletes the owned record, field, and object in that order. Bounded polling handles schema rebuild latency. Cleanup runs in `finally`, uses exact in-memory ownership checks, and verifies the custom metadata is absent. The command hard-rejects a non-loopback Twenty URL before any mutation.
+
+Every request has a 15-second timeout. The test rejects HTTP, timeout/network, GraphQL, malformed-envelope, cursor-loop, ownership, and cleanup errors and reports only sanitized phases without printing names, API names, identifiers, record or schema values, counts, raw payloads, or the API key.
 
 Other lifecycle commands:
 
@@ -48,6 +54,26 @@ npm run twenty:clean  # stop containers and delete this Compose project's volume
 ```
 
 `twenty:clean` is the full reset. It targets only the fixed `n8n-twentycrm-integration` Compose project declared in this repository.
+
+## Native webhook bridge qualification
+
+Twenty v2.9 dispatches webhooks from the worker service. This local-only Compose configuration maps `host.docker.internal` to Docker's Linux `host-gateway` for that worker. It also sets the supported `OUTBOUND_HTTP_SAFE_MODE_ENABLED=false` worker setting because Twenty's default safe mode rejects private/internal destinations. This flag disables private-network protection for all outbound worker requests, so it is appropriate only for this isolated disposable harness and must never be copied to a production deployment.
+
+Start n8n yourself and use the trigger's production webhook URL. Add that localhost URL to the ignored `integration/twenty/.env` without placing it in a shell command or log:
+
+```text
+TWENTY_WEBHOOK_URL=http://localhost:5678/webhook/<n8n-generated-path>
+```
+
+Then run:
+
+```sh
+npm run test:webhook-bridge
+```
+
+The command accepts only an explicit-port `http://localhost/...` or `http://127.0.0.1/...` production webhook path, never a remote host or test-webhook URL. It checks TCP reachability from the actual Twenty worker with bounded timeouts and prints no URL, path, credentials, or payloads.
+
+For Twenty's webhook form, replace only the displayed URL's host: `http://localhost:5678/webhook/...` becomes `http://host.docker.internal:5678/webhook/...`. Enter a strong shared secret despite Twenty labeling it optional, and save the same value in n8n's password-masked Twenty Webhook API credential. Activate the n8n workflow, create the webhook manually in Twenty, then create or update a uniquely owned disposable local record to prove native delivery. Confirm the matching n8n production execution in the UI and remove the disposable record/webhook afterward. This native signed-delivery path has passed against the pinned stack; registration remains manual because the project does not use private webhook-management or n8n execution APIs.
 
 ## Failure logs
 

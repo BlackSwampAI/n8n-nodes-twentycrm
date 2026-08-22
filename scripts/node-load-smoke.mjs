@@ -1,31 +1,33 @@
 import { createRequire } from 'node:module';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
-const modulePath = resolve(import.meta.dirname, '../dist/nodes/Twenty/Twenty.node.js');
+const packageRoot = process.argv[2] ? resolve(process.argv[2]) : resolve(import.meta.dirname, '..');
+const modulePath = resolve(packageRoot, 'dist/nodes/Twenty/Twenty.node.js');
 const { Twenty } = require(modulePath);
 const node = new Twenty();
-const triggerPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/TwentyTrigger.node.js');
+const triggerPath = resolve(packageRoot, 'dist/nodes/Twenty/TwentyTrigger.node.js');
 const { TwentyTrigger } = require(triggerPath);
 const trigger = new TwentyTrigger();
-const credentialPath = resolve(import.meta.dirname, '../dist/credentials/TwentyApi.credentials.js');
+const credentialPath = resolve(packageRoot, 'dist/credentials/TwentyApi.credentials.js');
 const { TwentyApi } = require(credentialPath);
 const credential = new TwentyApi();
 const webhookCredentialPath = resolve(
-	import.meta.dirname,
-	'../dist/credentials/TwentyWebhookApi.credentials.js',
+	packageRoot,
+	'dist/credentials/TwentyWebhookApi.credentials.js',
 );
 const { TwentyWebhookApi } = require(webhookCredentialPath);
 const webhookCredential = new TwentyWebhookApi();
-const requestPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/request.js');
+const requestPath = resolve(packageRoot, 'dist/nodes/Twenty/shared/request.js');
 const { twentyApiRequest } = require(requestPath);
-const errorPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/errors.js');
+const errorPath = resolve(packageRoot, 'dist/nodes/Twenty/shared/errors.js');
 const { classifyTwentyError, createTwentyNodeApiError } = require(errorPath);
-const metadataPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/metadata.js');
+const metadataPath = resolve(packageRoot, 'dist/nodes/Twenty/shared/metadata.js');
 const { createObjectMetadataService, normalizeTwentyObject, OBJECT_METADATA_QUERY } = require(
 	metadataPath,
 );
-const recordsPath = resolve(import.meta.dirname, '../dist/nodes/Twenty/shared/records.js');
+const recordsPath = resolve(packageRoot, 'dist/nodes/Twenty/shared/records.js');
 const { createRecordService } = require(recordsPath);
 
 if (node.description.displayName !== 'Twenty CRM' || node.description.name !== 'twenty') {
@@ -41,6 +43,16 @@ if (
 	webhookCredential.name !== 'twentyWebhookApi'
 ) {
 	throw new Error('Compiled Twenty CRM Trigger or webhook credential did not load as expected');
+}
+for (const description of [node.description, trigger.description]) {
+	for (const icon of [description.icon?.light, description.icon?.dark]) {
+		if (typeof icon !== 'string' || !icon.startsWith('file:')) {
+			throw new Error('Compiled node icon reference did not load as expected');
+		}
+		if (!existsSync(resolve(packageRoot, 'dist/nodes/Twenty', icon.slice('file:'.length)))) {
+			throw new Error('Compiled node icon asset is missing from the package');
+		}
+	}
 }
 if (
 	node.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest' ||

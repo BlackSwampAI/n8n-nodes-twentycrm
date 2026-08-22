@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 
 export const TWENTY_IMAGE =
 	'twentycrm/twenty:v2.9.0@sha256:0afdba1494ea50bad6eb278a20ae35933317483f23501157c2ed866b74d4bc4a';
+export const DOCKER_HOST_ALIAS = 'host.docker.internal';
 
 export function parseEnv(text) {
 	const values = {};
@@ -31,6 +32,7 @@ export function createLocalEnv(path) {
 		`APP_SECRET=${secret()}`,
 		'',
 		'# Add TWENTY_API_KEY after creating it in the local Twenty UI.',
+		'# Add TWENTY_WEBHOOK_URL when qualifying native local webhook delivery.',
 		'',
 	].join('\n');
 	mkdirSync(dirname(path), { recursive: true });
@@ -72,6 +74,63 @@ export function requireLocalApiKey(env) {
 	return env.TWENTY_API_KEY;
 }
 
+export function assertLoopbackTwentyUrl(value) {
+	let url;
+	try {
+		url = new URL(value);
+	} catch {
+		throw new Error('Live mutation qualification requires an absolute loopback Twenty URL');
+	}
+	if (
+		!['http:', 'https:'].includes(url.protocol) ||
+		!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ||
+		url.username ||
+		url.password ||
+		url.search ||
+		url.hash
+	) {
+		throw new Error('Live mutation qualification is restricted to a loopback Twenty URL');
+	}
+	return url.toString();
+}
+
+export async function cleanupOwnedCustomSchema({
+	cleanupRecords,
+	findOwnedObject,
+	cleanupField,
+	cleanupObject,
+	verifyAbsent,
+}) {
+	try {
+		await cleanupRecords();
+	} catch {}
+
+	let ownedObject;
+	try {
+		ownedObject = await findOwnedObject();
+	} catch {}
+	if (ownedObject !== undefined) {
+		try {
+			await cleanupField(ownedObject);
+		} catch {}
+	}
+
+	ownedObject = undefined;
+	try {
+		ownedObject = await findOwnedObject();
+	} catch {}
+	if (ownedObject !== undefined) {
+		try {
+			await cleanupObject(ownedObject);
+		} catch {}
+	}
+
+	try {
+		if (await verifyAbsent()) return;
+	} catch {}
+	throw new Error('Custom schema lifecycle cleanup failed.');
+}
+
 export function assertPinnedCompose(composeText) {
 	if (!composeText.includes(TWENTY_IMAGE)) throw new Error('Twenty v2.9.0 digest pin is missing');
 	if (/image:\s*[^\n]*(?:^|[:/@-])latest(?:\s|$)/im.test(composeText)) {
@@ -81,4 +140,35 @@ export function assertPinnedCompose(composeText) {
 		if (!composeText.includes(`  ${service}`))
 			throw new Error(`Compose service ${service} is missing`);
 	}
+	if (!composeText.includes("OUTBOUND_HTTP_SAFE_MODE_ENABLED: 'false'")) {
+		throw new Error('The local worker outbound-network qualification setting is missing');
+	}
+	if (!composeText.includes(`'${DOCKER_HOST_ALIAS}:host-gateway'`)) {
+		throw new Error('The deterministic Docker host bridge is missing');
+	}
+}
+
+export function localWebhookTarget(value) {
+	let url;
+	try {
+		url = new URL(value);
+	} catch {
+		throw new Error('TWENTY_WEBHOOK_URL must be an absolute local HTTP URL');
+	}
+	if (
+		url.protocol !== 'http:' ||
+		!['localhost', '127.0.0.1'].includes(url.hostname) ||
+		url.username ||
+		url.password ||
+		url.hash ||
+		!url.port ||
+		!url.pathname.startsWith('/webhook/')
+	) {
+		throw new Error(
+			'TWENTY_WEBHOOK_URL must be a localhost production webhook URL with an explicit port',
+		);
+	}
+	const containerUrl = new URL(url.toString());
+	containerUrl.hostname = DOCKER_HOST_ALIAS;
+	return { containerUrl: containerUrl.toString(), port: Number(url.port) };
 }

@@ -35,6 +35,10 @@ services:
       <<: *twenty-environment
       DISABLE_DB_MIGRATIONS: 'true'
       DISABLE_CRON_JOBS_REGISTRATION: 'true'
+      # Local qualification only. Never copy this broad outbound-network setting to production.
+      OUTBOUND_HTTP_SAFE_MODE_ENABLED: 'false'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     depends_on:
       db:
         condition: service_healthy

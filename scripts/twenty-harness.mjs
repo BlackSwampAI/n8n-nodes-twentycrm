@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
 	createLocalEnv,
+	localWebhookTarget,
 	readEnv,
 	redactHarnessText,
 	writePrivateFile,
@@ -47,7 +48,15 @@ function retainLogs() {
 		env.ENCRYPTION_KEY,
 		env.APP_SECRET,
 		env.TWENTY_API_KEY,
+		env.TWENTY_WEBHOOK_URL,
 	];
+	try {
+		if (env.TWENTY_WEBHOOK_URL) {
+			secrets.push(localWebhookTarget(env.TWENTY_WEBHOOK_URL).containerUrl);
+		}
+	} catch {
+		// Invalid local webhook configuration is reported by the qualification command.
+	}
 	writePrivateFile(
 		failureLog,
 		redactHarnessText(`${result.stdout ?? ''}${result.stderr ?? ''}`, secrets),

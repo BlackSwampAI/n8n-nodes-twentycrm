@@ -42,3 +42,4 @@ jobs:
       - run: npm run release:check
       - run: npm run package:check
       - run: npm run smoke:load
+      - run: npm run smoke:install

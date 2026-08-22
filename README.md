@@ -1,52 +1,69 @@
 # Twenty CRM for n8n
 
-`@blackswampai/n8n-nodes-twentycrm` is an n8n community-node package for Twenty CRM. The project is under active development: it is not published yet and this foundation release does not provide API operations.
+`@blackswampai/n8n-nodes-twentycrm` is an independent n8n community-node package for Twenty CRM. Version 0.1 is under active development and has not been published to npm.
+
+> This is an unofficial Black Swamp AI community integration. It is not affiliated with, sponsored by, or endorsed by Twenty.com, PBC. Twenty and the Twenty logo are trademarks of Twenty.com, PBC.
 
 ## Installation
 
-The package is not yet available from npm. After a future release, the intended community-node package name will be:
+After publication, install the package through n8n's **Settings → Community Nodes** using:
 
 ```text
 @blackswampai/n8n-nodes-twentycrm
 ```
 
-For development, use Node.js 22.22.0 or newer, clone the repository, and run `npm ci` followed by `npm run build`.
-
-An opt-in disposable Twenty v2.9.0 environment is available for authenticated local qualification. See [Local Twenty integration harness](docs/LOCAL_TWENTY.md).
+For development, use Node.js 22.22.0 or newer, clone the repository, then run `npm ci`, `npm run build`, and `npm run smoke:install`.
 
 ## Compatibility
 
-No Twenty Cloud, self-hosted Twenty, or n8n runtime version has been qualified yet. The package declares Node.js `>=22.22.0` and treats `n8n-workflow` as a host-provided peer dependency.
+The package supports configurable Twenty Cloud and self-hosted root URLs. Its automated live API qualification is pinned to Twenty v2.9.0 by immutable image digest. The package declares Node.js `>=22.22.0` and `n8n-workflow` as a host-provided peer.
 
-The planned qualification strategy covers Twenty Cloud and a pinned self-hosted Twenty release. See [Compatibility and qualification](docs/COMPATIBILITY.md).
+This is not a broad Twenty or n8n version matrix, and the package is not yet n8n-verified. See [Compatibility and qualification](docs/COMPATIBILITY.md) and the [release-candidate UI checklist](docs/QUALIFICATION.md).
 
 ## Credentials
 
-The `Twenty API` credential requires an API key and sends it as a Bearer authorization value when later operations make requests. Its configurable Base URL defaults to `https://api.twenty.com`; self-hosted users should enter the root URL of their Twenty installation, including any reverse-proxy path prefix. Pasted `/rest`, `/graphql`, `/metadata`, or `/rest/metadata` endpoint suffixes are normalized centrally.
+`Twenty API` requires a Twenty API key and root Base URL. It sends Bearer authentication through n8n's credential helper. The default is `https://api.twenty.com`; self-hosted users enter their installation root, including any reverse-proxy prefix. Pasted `/rest`, `/graphql`, `/metadata`, and `/rest/metadata` suffixes are normalized centrally.
 
-Testing the credential sends a read-only Core GraphQL `__typename` query to validate the normalized API route and Bearer authentication without reading CRM records. Never include API keys in workflows, source code, or issue reports.
+The credential test sends a minimal read-only Core GraphQL query. The API-key role needs access to every object used by a workflow. Dynamic schema discovery needs metadata access; the local custom-schema qualification additionally requires the **Data Model** settings permission.
+
+`Twenty Webhook API` stores the shared webhook secret as a password-masked value. Enter the same strong secret in Twenty's webhook form even though Twenty labels it optional. Unsigned trigger delivery is not supported.
+
+Never place API keys or webhook secrets in workflow fields, source code, logs, or issue reports.
 
 ## Operations
 
-The `Schema Object` resource provides read-only `Get` and `Get Many` operations backed by authenticated Metadata GraphQL discovery. `Get` saves the stable singular API name, while `Get Many` defaults to active, non-system objects and can optionally include inactive or system definitions. The same active, non-system discovery supplies the reusable object selector for standard and custom objects.
+The action node provides:
 
-The `Record` resource provides `Create`, `Get`, `Get Many`, `Update`, and `Delete` for active standard and custom workspace objects. Friendly `Company` and `Person` resources expose the same operations as metadata-aware wrappers over that shared Record implementation. Field Mapping shows discovered preferred fields in a **Common Fields** section, while all remaining active writable fields, including workspace custom fields, remain available from **Additional Fields** through **Add Field to Send**. The generic Record resource keeps its existing single mapper and metadata-defined ordering.
+- **Company, Person, Opportunity, Task, and Note:** Create, Get, Get Many, Update, and Delete.
+- **Record:** the same generic CRUD surface for active standard and custom workspace objects.
+- **Schema Object:** read-only Get and Get Many metadata discovery.
 
-Record operations resolve stable singular API names through metadata and route Core REST through discovered plural API names. Create and Update default to metadata-driven Field Mapping with stable Twenty API names, known compound-field reconstruction, and raw JSON access for future or unsupported types. An explicit JSON input mode remains available for advanced payloads. `Get Many` supports an exact bounded limit or safe cursor-based Return All, plus Twenty's documented raw REST `filter` and `order_by` expression strings using workspace field API names. Record responses retain the JSON returned by Twenty; Delete returns only a deterministic confirmation object.
+Create and Update default to metadata-driven Field Mapping. Fixed resources show common fields first and keep remaining writable/custom fields under Additional Fields. Generic Record retains full dynamic schema ordering. Known compound values are reconstructed for Twenty's REST API; JSON input remains available as an advanced fallback. Get Many supports bounded Limit/Return All cursor pagination and raw Twenty REST filter/order expressions.
 
-Discovery and record operations use one shared authenticated request path with sanitized status/network/GraphQL diagnostics and conservative retries. Metadata GraphQL POST requests are explicitly marked read-only and safe for retry, make at most three total attempts on transient failures, and never expose raw response or credential data through terminal errors. Record mutations never opt into retries. Schema mutations are not available yet. Planned capabilities are described in [Architecture](docs/ARCHITECTURE.md).
+All resources reuse shared metadata, authenticated transport, pagination, field mapping, and sanitized errors. Transient retries are conservative and idempotency-gated; record mutations are never automatically retried. Schema creation or modification is not exposed as a node operation.
 
-The `Twenty CRM Trigger` receives Record Created, Record Updated, and Record Deleted events for a selected active standard/custom object or all objects. Register its displayed test or production webhook URL manually in Twenty under **Settings → API & Webhooks**. Enter a strong shared secret in Twenty’s webhook form even though Twenty labels it optional, then save the same secret in a password-masked `Twenty Webhook API` credential. The trigger requires signed deliveries; it verifies `X-Twenty-Webhook-Signature` over the exact raw request body and `X-Twenty-Webhook-Timestamp`, rejects deliveries outside a five-minute signed timestamp tolerance, and filters the all-events webhook stream inside n8n. Unsigned mode and automatic webhook registration are not supported.
+The **Twenty CRM Trigger** receives Record Created, Record Updated, and Record Deleted events for one active standard/custom object or All Objects. Registration is manual:
+
+1. Choose **Test URL** only while n8n is listening for a test event; use **Production URL** for an active workflow.
+2. Create the webhook in Twenty under **Settings → APIs & Webhooks**.
+3. Enter a strong shared secret in Twenty and save the same value in `Twenty Webhook API`.
+
+The trigger verifies Twenty's HMAC-SHA256 signature over the exact raw request body and millisecond timestamp, requires delivery within a five-minute signed timestamp tolerance, and filters the all-events stream inside n8n. Automatic registration and unsigned mode are not supported.
+
+## Troubleshooting
+
+See [Troubleshooting](docs/TROUBLESHOOTING.md) for credential/network failures, dynamic fields, permissions, record errors, local Docker routing, and webhook signature failures.
 
 ## Resources
 
 - [Twenty documentation](https://docs.twenty.com/)
 - [n8n community node documentation](https://docs.n8n.io/integrations/community-nodes/)
+- [Local Twenty harness](docs/LOCAL_TWENTY.md)
 - [Project issues](https://github.com/BlackSwampAI/n8n-nodes-twentycrm/issues)
 - [Release process](RELEASING.md)
 
-The light and dark `20` node icons are original project artwork created for this package; they are not copied from Twenty's upstream repository. Twenty and its marks belong to their respective owner.
+The packaged light and dark icons use the unmodified official Twenty 96×96 SVG from [`twentyhq/twenty` commit `1642be86f5c17217372366b9e2a950ebf88a53db`](https://github.com/twentyhq/twenty/blob/1642be86f5c17217372366b9e2a950ebf88a53db/packages/twenty-codex-plugin/assets/twenty-logo.svg). Use of that mark does not imply affiliation, sponsorship, or endorsement.
 
 ## License
 
-This project is available under the [MIT License](LICENSE.md).
+Project code is available under the [MIT License](LICENSE.md). Third-party trademarks remain the property of their respective owners.
