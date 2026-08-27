@@ -1,4 +1,9 @@
-import type { IAuthenticateGeneric, ICredentialType, INodeProperties } from 'n8n-workflow';
+import type {
+	IAuthenticateGeneric,
+	ICredentialTestRequest,
+	ICredentialType,
+	INodeProperties,
+} from 'n8n-workflow';
 
 export class TwentyApi implements ICredentialType {
 	name = 'twentyApi';
@@ -32,5 +37,25 @@ export class TwentyApi implements ICredentialType {
 				Authorization: '=Bearer {{$credentials.apiKey}}',
 			},
 		},
+	};
+
+	test: ICredentialTestRequest = {
+		request: {
+			baseURL:
+				"={{$credentials.baseUrl.trim().replace(/\\/+$/, '').replace(/\\/rest\\/metadata$/, '').replace(/\\/metadata$/, '').replace(/\\/graphql$/, '').replace(/\\/rest$/, '')}}",
+			url: '/graphql',
+			method: 'POST',
+			body: { query: 'query CredentialTest { __typename }' },
+		},
+		rules: [
+			{
+				type: 'responseSuccessBody',
+				properties: {
+					key: 'data.__typename',
+					value: undefined,
+					message: 'Twenty did not return a valid GraphQL response.',
+				},
+			},
+		],
 	};
 }

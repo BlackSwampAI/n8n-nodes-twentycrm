@@ -1,4 +1,3 @@
-/* eslint-disable @n8n/community-nodes/require-node-api-error -- Pure path and credential-shape validation failures are caught and converted to sanitized NodeApiError instances with node context. */
 import type {
 	IDataObject,
 	IExecuteFunctions,
@@ -42,10 +41,8 @@ function normalizeRequestPath(path = ''): string {
 		throw new Error('Twenty API request path must be a root-relative path');
 	}
 
-	let decodedPath: string;
-	try {
-		decodedPath = decodeURIComponent(path);
-	} catch {
+	const decodedPath = safelyDecodePath(path);
+	if (decodedPath === undefined) {
 		throw new Error('Twenty API request path must use valid URL encoding');
 	}
 	if (
@@ -56,6 +53,14 @@ function normalizeRequestPath(path = ''): string {
 	}
 
 	return path;
+}
+
+function safelyDecodePath(path: string): string | undefined {
+	try {
+		return decodeURIComponent(path);
+	} catch {
+		return undefined;
+	}
 }
 
 export async function twentyApiRequest<T = unknown>(

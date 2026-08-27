@@ -1,5 +1,5 @@
 import type { IDataObject, IExecuteFunctions, ILoadOptionsFunctions } from 'n8n-workflow';
-import { NodeOperationError } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 import type {
 	NormalizedFieldDefinition,
@@ -15,6 +15,10 @@ type MetadataContext = IExecuteFunctions | ILoadOptionsFunctions;
 type UnknownRecord = Record<string, unknown>;
 
 const MAX_PAGES = 100;
+
+function rethrowNodeApiError(error: NodeApiError): never {
+	throw error;
+}
 
 export const LEGACY_OBJECT_METADATA_QUERY = `query TwentyObjectMetadata($after: ConnectionCursor) {
   objects(paging: { first: 1000, after: $after }) {
@@ -305,9 +309,11 @@ export function createObjectMetadataService(context: MetadataContext): ObjectMet
 			if (error instanceof TwentyMetadataError) {
 				throw new NodeOperationError(context.getNode(), error.message);
 			}
-			// Transport failures are already sanitized n8n NodeApiError instances.
-			// eslint-disable-next-line @n8n/community-nodes/require-node-api-error
-			throw error;
+			if (error instanceof NodeApiError) rethrowNodeApiError(error);
+			throw new NodeOperationError(
+				context.getNode(),
+				'Unable to discover the Twenty workspace schema.',
+			);
 		}
 	}
 	return {

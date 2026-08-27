@@ -76,10 +76,7 @@ describe('Twenty CRM Schema Object node', () => {
 		const node = new Twenty();
 		expect(node.description.displayName).toBe('Twenty CRM');
 		expect(node.description.usableAsTool).toBe(true);
-		expect(node.description.credentials).toEqual([
-			{ name: 'twentyApi', required: true, testedBy: 'twentyApiCredentialTest' },
-		]);
-		expect(node.methods.credentialTest.twentyApiCredentialTest).toEqual(expect.any(Function));
+		expect(node.description.credentials).toEqual([{ name: 'twentyApi', required: true }]);
 		const resource = node.description.properties.find(({ name }) => name === 'resource');
 		expect(resource?.options?.map((option) => option.value)).toEqual([
 			'company',

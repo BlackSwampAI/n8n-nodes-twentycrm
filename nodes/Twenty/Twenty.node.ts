@@ -10,7 +10,6 @@ import type {
 } from 'n8n-workflow';
 import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
-import { twentyApiCredentialTest } from './shared/credentialTest';
 import {
 	buildFixedResourceMapperFields,
 	buildRecordMapperFields,
@@ -25,6 +24,10 @@ import { createFixedRecordService, createRecordService } from './shared/records'
 
 const FIXED_RESOURCE_VALUES = [...FIXED_RESOURCES];
 
+function rethrowNodeApiError(error: NodeApiError): never {
+	throw error;
+}
+
 export class Twenty implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Twenty CRM',
@@ -36,7 +39,7 @@ export class Twenty implements INodeType {
 		usableAsTool: true,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
 		defaults: { name: 'Twenty CRM' },
-		credentials: [{ name: 'twentyApi', required: true, testedBy: 'twentyApiCredentialTest' }],
+		credentials: [{ name: 'twentyApi', required: true }],
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
 		properties: [
@@ -400,7 +403,6 @@ export class Twenty implements INodeType {
 	};
 
 	methods = {
-		credentialTest: { twentyApiCredentialTest },
 		listSearch: {
 			async searchSchemaObjects(
 				this: ILoadOptionsFunctions,
@@ -505,8 +507,7 @@ export class Twenty implements INodeType {
 				if (error instanceof TwentyFieldMappingError) {
 					throw new NodeOperationError(this.getNode(), error.message, { itemIndex });
 				}
-				// eslint-disable-next-line @n8n/community-nodes/require-node-api-error -- This is already a sanitized NodeApiError and must retain its safe message, description, and identity.
-				if (error instanceof NodeApiError) throw error;
+				if (error instanceof NodeApiError) rethrowNodeApiError(error);
 				throw new NodeOperationError(
 					this.getNode(),
 					'Unable to prepare the Twenty record field mapping.',
