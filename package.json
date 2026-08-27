@@ -1,6 +1,6 @@
 {
 	"name": "@blackswampai/n8n-nodes-twentycrm",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "n8n community integration for Twenty CRM",
 	"license": "MIT",
 	"homepage": "https://blackswampai.com/n8n-nodes/twenty-crm/",

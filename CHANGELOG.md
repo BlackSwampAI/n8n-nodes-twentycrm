@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.2
+
+- Restore Metadata GraphQL discovery on Twenty v2.35 while retaining compatibility with the pinned v2.9 schema.
+- Keep fixed Company, Person, Opportunity, Task, and Note reads and JSON-input CRUD independent of Metadata GraphQL availability.
+- Replace misleading generic API-settings failures with safe GraphQL compatibility guidance.
+
 ## 0.1.1
 
 - Refresh the npm README with package badges, navigation, current installation guidance, provenance details, and Black Swamp AI product-page links.
