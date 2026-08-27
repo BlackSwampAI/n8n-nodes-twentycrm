@@ -1,12 +1,16 @@
 # Compatibility and qualification
 
-The project has qualified a pinned self-hosted Twenty v2.9.0 development matrix, but not a broad operational version matrix.
+The project has live-qualified a pinned self-hosted Twenty v2.9.0 development matrix and has fixture-based Metadata GraphQL compatibility coverage for Twenty v2.35.0, but not a broad operational version matrix.
 
 The local integration harness pins Twenty v2.9.0 by tag and verified image digest, with explicitly versioned PostgreSQL and Redis images rather than `latest`. CI covers the Node.js 22.22.0 floor and Node.js 24. Twenty Cloud has not been live-qualified, and neither n8n verification nor compatibility with every n8n/Twenty release is claimed.
 
 The credential accepts absolute HTTP or HTTPS root URLs, allowing HTTPS Twenty Cloud URLs and HTTP or HTTPS self-hosted installations. URL normalization, authenticated request construction, safe error normalization, bounded retry policy, and the read-only Core GraphQL credential probe are unit-tested with mocks and exercised against the pinned self-hosted stack. Twenty error payloads and `Retry-After` behavior are treated defensively rather than as a stable vendor-specific contract.
 
 Compatibility claims will be added only after the relevant automated and hands-on checks pass. Until then, the repository and npm metadata must not imply production support or n8n verification.
+
+Metadata discovery prefers the v2.35 `isUIEditable`/`isUICreatable` shape and safely falls back to the legacy v2.9 `isUIReadOnly`/`isCustom` shape when the modern query is rejected. Because v2.35 no longer exposes a direct object or field `isCustom` flag, that classification is retained when the legacy API supplies it and otherwise remains unknown; the node does not infer it from unrelated flags. Fixed Company, Person, Opportunity, Task, and Note REST routes use shared explicit descriptors, so their reads and JSON-input CRUD are independent of Metadata GraphQL. Generic Record, Schema Object, selectors, and field mapping still require metadata access.
+
+The v2.35 compatibility path must still be live-qualified against an isolated pinned v2.35 stack and through an HTTPS reverse proxy before expanding the live support claim. Do not point mutation qualification at a production workspace. The retained v2.9 harness and volumes must not be upgraded in place.
 
 The v2.9.0 harness qualifies authenticated routing to Core GraphQL and Metadata GraphQL after a user creates a local API key through Twenty's supported UI. Its opt-in discovery check runs the compiled canonical object-metadata query and normalizer. Core REST qualification exercises generic Record reads plus disposable Company, Person, Opportunity, Task, and Note lifecycles with guaranteed cleanup and absence checks.
 

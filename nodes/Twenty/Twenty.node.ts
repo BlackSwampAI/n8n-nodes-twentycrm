@@ -21,7 +21,7 @@ import {
 	TwentyFieldMappingError,
 } from './shared/fieldMapping';
 import { createObjectMetadataService } from './shared/metadata';
-import { createRecordService } from './shared/records';
+import { createFixedRecordService, createRecordService } from './shared/records';
 
 const FIXED_RESOURCE_VALUES = [...FIXED_RESOURCES];
 
@@ -472,7 +472,7 @@ export class Twenty implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const output: INodeExecutionData[] = [];
 		const metadataService = createObjectMetadataService(this);
-		const recordService = createRecordService(this, metadataService);
+		const genericRecordService = createRecordService(this, metadataService);
 		const mappedInput = async (
 			resource: string,
 			objectApiName: string,
@@ -532,6 +532,9 @@ export class Twenty implements INodeType {
 				});
 			}
 			if (resource === 'record' || isFixedResource(resource)) {
+				const recordService = isFixedResource(resource)
+					? createFixedRecordService(this, resource)
+					: genericRecordService;
 				const objectApiName = isFixedResource(resource)
 					? resource
 					: (this.getNodeParameter('objectApiName', itemIndex, '', {

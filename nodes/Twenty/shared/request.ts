@@ -25,6 +25,7 @@ export interface TwentyRequestOptions {
 	query?: IDataObject;
 	body?: IDataObject | IDataObject[];
 	retry?: 'auto' | 'safe' | 'never';
+	allowGraphqlErrors?: boolean;
 }
 
 const MAX_ATTEMPTS = 3;
@@ -101,7 +102,7 @@ export async function twentyApiRequest<T = unknown>(
 		const graphqlFailure = options.surface.toLowerCase().includes('graphql')
 			? classifyTwentyGraphqlResponse(response)
 			: undefined;
-		if (graphqlFailure) {
+		if (graphqlFailure && !options.allowGraphqlErrors) {
 			throw createTwentyNodeApiError(context.getNode(), graphqlFailure);
 		}
 		return response;

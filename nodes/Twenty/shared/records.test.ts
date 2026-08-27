@@ -2,7 +2,7 @@ import type { IExecuteFunctions } from 'n8n-workflow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NormalizedObjectDefinition, ObjectMetadataService } from './contracts';
-import { createRecordService } from './records';
+import { createFixedRecordService, createRecordService } from './records';
 import { twentyApiRequest } from './request';
 
 vi.mock('./request', () => ({ twentyApiRequest: vi.fn() }));
@@ -52,6 +52,31 @@ describe('Twenty record read service', () => {
 			surface: 'coreRest',
 			path: '/vehicles/record%20value',
 		});
+	});
+
+	it('routes every fixed Get Many resource without metadata discovery', async () => {
+		for (const [resource, plural] of [
+			['company', 'companies'],
+			['person', 'people'],
+			['opportunity', 'opportunities'],
+			['task', 'tasks'],
+			['note', 'notes'],
+		] as const) {
+			requestMock.mockResolvedValueOnce({
+				data: { [plural]: [] },
+				pageInfo: { hasNextPage: false, endCursor: null },
+			});
+			await expect(
+				createFixedRecordService(context, resource).getMany(resource, {
+					returnAll: false,
+					limit: 1,
+				}),
+			).resolves.toEqual([]);
+			expect(requestMock).toHaveBeenLastCalledWith(
+				context,
+				expect.objectContaining({ path: `/${plural}` }),
+			);
+		}
 	});
 
 	it('honors a finite limit across pages and preserves filter/sort query values', async () => {

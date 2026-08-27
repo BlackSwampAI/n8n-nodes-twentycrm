@@ -76,13 +76,25 @@ describe('Twenty error normalization', () => {
 		['GRAPHQL_VALIDATION_FAILED', 'invalidRequest'],
 		['NOT_FOUND', 'notFound'],
 		['CONFLICT', 'conflict'],
-		['INTERNAL_SERVER_ERROR', 'unknown'],
+		['INTERNAL_SERVER_ERROR', 'graphql'],
 	])('classifies allowlisted GraphQL code %s safely', (code, kind) => {
 		expect(
 			classifyTwentyGraphqlResponse({
 				errors: [{ message: 'private response', path: ['privateRecord'], extensions: { code } }],
 			}),
 		).toMatchObject({ kind, retryable: false });
+	});
+
+	it('gives safe compatibility guidance for unrecognized GraphQL errors', () => {
+		const failure = classifyTwentyGraphqlResponse({
+			errors: [{ message: 'Cannot query private field', path: ['private'], extensions: {} }],
+		});
+		expect(failure).toMatchObject({
+			kind: 'graphql',
+			message: 'Twenty GraphQL request was rejected',
+		});
+		expect(failure?.description).toContain('schema may be incompatible');
+		expect(JSON.stringify(failure)).not.toContain('private');
 	});
 
 	it('returns no GraphQL failure for an empty errors array', () => {

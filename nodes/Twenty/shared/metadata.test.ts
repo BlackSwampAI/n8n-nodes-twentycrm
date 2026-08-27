@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	createObjectMetadataService,
 	discoverTwentyObjects,
+	MODERN_OBJECT_METADATA_QUERY,
 	normalizeTwentyObject,
 	OBJECT_METADATA_QUERY,
 } from './metadata';
@@ -142,7 +143,7 @@ describe('Twenty metadata discovery', () => {
 				method: 'POST',
 				surface: 'metadataGraphql',
 				retry: 'safe',
-				body: { query: OBJECT_METADATA_QUERY, variables: { after: null } },
+				body: { query: MODERN_OBJECT_METADATA_QUERY, variables: { after: null } },
 			}),
 		);
 		expect(requestMock).toHaveBeenNthCalledWith(
@@ -217,6 +218,43 @@ describe('Twenty metadata discovery', () => {
 			isReadOnly: true,
 			isNullable: true,
 			isRequired: false,
+		});
+	});
+
+	it('normalizes the v2.35 editable/creatable shape without guessing removed custom flags', () => {
+		const modernField = field({ isUIEditable: false });
+		delete modernField.isCustom;
+		delete modernField.isUIReadOnly;
+		const modernObject = object({
+			isUIEditable: true,
+			isUICreatable: false,
+			fieldsList: [modernField],
+		});
+		delete modernObject.isCustom;
+		delete modernObject.isUIReadOnly;
+
+		expect(normalizeTwentyObject(modernObject)).toMatchObject({
+			isCustom: undefined,
+			isReadOnly: false,
+			isCreatable: false,
+			fields: [expect.objectContaining({ isCustom: undefined, isReadOnly: true })],
+		});
+	});
+
+	it('falls back from a v2.35 query validation response to the pinned v2.9 query', async () => {
+		requestMock
+			.mockResolvedValueOnce({
+				errors: [{ message: 'private schema detail', extensions: {} }],
+			})
+			.mockResolvedValueOnce(page([object()]));
+
+		await expect(discoverTwentyObjects({} as ILoadOptionsFunctions)).resolves.toHaveLength(1);
+		expect(requestMock.mock.calls[0][1]).toMatchObject({
+			body: { query: MODERN_OBJECT_METADATA_QUERY, variables: { after: null } },
+			allowGraphqlErrors: true,
+		});
+		expect(requestMock.mock.calls[1][1]).toMatchObject({
+			body: { query: OBJECT_METADATA_QUERY, variables: { after: null } },
 		});
 	});
 

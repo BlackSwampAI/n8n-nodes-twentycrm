@@ -4,12 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { Twenty } from './Twenty.node';
 import type { NormalizedObjectDefinition } from './shared/contracts';
 import { createObjectMetadataService } from './shared/metadata';
-import { createRecordService } from './shared/records';
+import { createFixedRecordService, createRecordService } from './shared/records';
 
 vi.mock('./shared/metadata', () => ({ createObjectMetadataService: vi.fn() }));
-vi.mock('./shared/records', () => ({ createRecordService: vi.fn() }));
+vi.mock('./shared/records', () => ({
+	createFixedRecordService: vi.fn(),
+	createRecordService: vi.fn(),
+}));
 const serviceMock = vi.mocked(createObjectMetadataService);
 const recordServiceMock = vi.mocked(createRecordService);
+const fixedRecordServiceMock = vi.mocked(createFixedRecordService);
+
+fixedRecordServiceMock.mockImplementation(() => recordServiceMock.mock.results.at(-1)?.value);
 
 function schemaObject(
 	overrides: Partial<NormalizedObjectDefinition> = {},

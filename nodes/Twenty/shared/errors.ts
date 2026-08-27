@@ -7,6 +7,7 @@ export type TwentyFailureKind =
 	| 'authentication'
 	| 'conflict'
 	| 'connectivity'
+	| 'graphql'
 	| 'invalidRequest'
 	| 'notFound'
 	| 'permission'
@@ -54,6 +55,11 @@ const FAILURE_DETAILS: Record<TwentyFailureKind, Pick<TwentyFailure, 'message' |
 		message: 'Unable to reach the Twenty API',
 		description:
 			'Check the Base URL, DNS, TLS certificate, and network access to the self-hosted or Twenty Cloud instance.',
+	},
+	graphql: {
+		message: 'Twenty GraphQL request was rejected',
+		description:
+			'The Twenty API schema may be incompatible with this node version. Check the supported Twenty versions and metadata API access.',
 	},
 	invalidRequest: {
 		message: 'Twenty API rejected the request',
@@ -240,7 +246,7 @@ export function classifyTwentyGraphqlResponse(response: unknown): TwentyFailure 
 		const code = typeof extensions?.code === 'string' ? extensions.code.toUpperCase() : undefined;
 		if (code && GRAPHQL_CODE_KINDS[code]) return failure(GRAPHQL_CODE_KINDS[code]);
 	}
-	return failure('unknown');
+	return failure('graphql');
 }
 
 export function retryDelayMs(failureDetails: TwentyFailure, retryIndex: number): number {

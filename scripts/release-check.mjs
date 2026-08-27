@@ -41,11 +41,11 @@ if (!isValidN8nPackageName(packageJson.name ?? '')) {
 if (packageJson.name !== '@blackswampai/n8n-nodes-twentycrm') {
 	fail('package.json name must match the approved @blackswampai/n8n-nodes-twentycrm identity');
 }
-if (packageJson.version !== '0.1.1') {
-	fail('package.json version must be exactly 0.1.1 for this release candidate');
+if (packageJson.version !== '0.1.2') {
+	fail('package.json version must be exactly 0.1.2 for this release candidate');
 }
-if (!/^## 0\.1\.1$/m.test(changelog)) {
-	fail('CHANGELOG.md must contain a real 0.1.1 release entry');
+if (!/^## 0\.1\.2$/m.test(changelog)) {
+	fail('CHANGELOG.md must contain a real 0.1.2 release entry');
 }
 if (
 	packageLock.version !== packageJson.version ||

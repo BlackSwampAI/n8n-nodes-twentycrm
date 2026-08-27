@@ -10,6 +10,7 @@ Do not paste API keys, webhook secrets, raw payloads, private record data, or fu
 
 ## Dynamic objects and fields
 
+- **Twenty GraphQL request was rejected:** the API schema may not match this node version, or the API-key role may not have metadata access. Record the sanitized node and Twenty versions; do not paste the raw GraphQL response. Fixed-resource reads and JSON-input CRUD do not require metadata, while generic Record, Schema Object, selectors, and Field Mapping do.
 - Retry the object or field loader after confirming the credential and Twenty health.
 - Confirm the object is active, non-system, and not remote. Fixed-resource fields also must be active and writable.
 - A saved field or object API name may be stale after a schema rename or deletion. Reopen the selector and choose the current value.
