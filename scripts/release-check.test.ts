@@ -23,11 +23,11 @@ describe('release audit', () => {
 	});
 
 	it('accepts ordinary local context and the exact package-version tag', () => {
-		expect(githubTagFailure('0.1.2', {})).toBeUndefined();
+		expect(githubTagFailure('0.1.3', {})).toBeUndefined();
 		expect(
-			githubTagFailure('0.1.2', {
-				GITHUB_REF: 'refs/tags/v0.1.2',
-				GITHUB_REF_NAME: 'v0.1.2',
+			githubTagFailure('0.1.3', {
+				GITHUB_REF: 'refs/tags/v0.1.3',
+				GITHUB_REF_NAME: 'v0.1.3',
 				GITHUB_REF_TYPE: 'tag',
 			}),
 		).toBeUndefined();
@@ -35,12 +35,12 @@ describe('release audit', () => {
 
 	it('rejects a GitHub tag that does not exactly match the package version', () => {
 		expect(
-			githubTagFailure('0.1.2', {
-				GITHUB_REF: 'refs/tags/v0.1.3',
-				GITHUB_REF_NAME: 'v0.1.3',
+			githubTagFailure('0.1.3', {
+				GITHUB_REF: 'refs/tags/v0.1.2',
+				GITHUB_REF_NAME: 'v0.1.2',
 				GITHUB_REF_TYPE: 'tag',
 			}),
-		).toBe('GitHub tag must exactly match package version v0.1.2');
+		).toBe('GitHub tag must exactly match package version v0.1.3');
 	});
 
 	it('pins the complete gate before one publish action without shell token materialization', () => {
@@ -75,16 +75,17 @@ describe('release audit', () => {
 		expect(workflow).not.toMatch(/npm config|_authToken|run:\s*\|/);
 	});
 
-	it('requires both trigger credential tests without a lint suppression', () => {
+	it('requires the API credential-class test and local webhook credential test', () => {
 		const credential = readFileSync(
 			resolve(root, 'credentials/TwentyWebhookApi.credentials.ts'),
 			'utf8',
 		);
 		const smoke = readFileSync(resolve(root, 'scripts/node-load-smoke.mjs'), 'utf8');
 		expect(credential).not.toContain('credential-test-required');
-		expect(smoke).toContain(
-			"trigger.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest'",
-		);
+		expect(smoke).toContain('node.description.credentials?.[0]?.testedBy !== undefined');
+		expect(smoke).toContain("typeof credential.test?.request?.baseURL !== 'string'");
+		expect(smoke).toContain("credential.test?.rules?.[0]?.type !== 'responseSuccessBody'");
+		expect(smoke).toContain('trigger.description.credentials?.[0]?.testedBy !== undefined');
 		expect(smoke).toContain(
 			"trigger.description.credentials?.[1]?.testedBy !== 'twentyWebhookCredentialTest'",
 		);

@@ -55,11 +55,12 @@ for (const description of [node.description, trigger.description]) {
 	}
 }
 if (
-	node.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest' ||
-	typeof node.methods?.credentialTest?.twentyApiCredentialTest !== 'function' ||
-	trigger.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest' ||
+	node.description.credentials?.[0]?.testedBy !== undefined ||
+	typeof credential.test?.request?.baseURL !== 'string' ||
+	credential.test?.request?.url !== '/graphql' ||
+	credential.test?.rules?.[0]?.type !== 'responseSuccessBody' ||
+	trigger.description.credentials?.[0]?.testedBy !== undefined ||
 	trigger.description.credentials?.[1]?.testedBy !== 'twentyWebhookCredentialTest' ||
-	typeof trigger.methods?.credentialTest?.twentyApiCredentialTest !== 'function' ||
 	typeof trigger.methods?.credentialTest?.twentyWebhookCredentialTest !== 'function' ||
 	typeof twentyApiRequest !== 'function' ||
 	typeof classifyTwentyError !== 'function' ||

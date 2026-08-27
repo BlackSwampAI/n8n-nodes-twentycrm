@@ -1,13 +1,12 @@
-/* eslint-disable n8n-nodes-base/node-filename-against-convention -- This file tests the conventionally named trigger node implementation. */
 import { createHmac } from 'node:crypto';
 
-import type { ILoadOptionsFunctions, IWebhookFunctions } from 'n8n-workflow';
+import type { IHookFunctions, ILoadOptionsFunctions, IWebhookFunctions } from 'n8n-workflow';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TwentyTrigger } from './TwentyTrigger.node';
-import { createObjectMetadataService } from './shared/metadata';
+import { TwentyTrigger } from '../nodes/Twenty/TwentyTrigger.node';
+import { createObjectMetadataService } from '../nodes/Twenty/shared/metadata';
 
-vi.mock('./shared/metadata', () => ({ createObjectMetadataService: vi.fn() }));
+vi.mock('../nodes/Twenty/shared/metadata', () => ({ createObjectMetadataService: vi.fn() }));
 const metadataMock = vi.mocked(createObjectMetadataService);
 
 const secret = 'synthetic-secret';
@@ -47,7 +46,7 @@ describe('Twenty CRM Trigger node', () => {
 			group: ['trigger'],
 			inputs: [],
 			credentials: [
-				{ name: 'twentyApi', testedBy: 'twentyApiCredentialTest' },
+				{ name: 'twentyApi', required: true },
 				{ name: 'twentyWebhookApi', testedBy: 'twentyWebhookCredentialTest' },
 			],
 			webhooks: [{ httpMethod: 'POST', responseMode: 'onReceived' }],
@@ -64,9 +63,22 @@ describe('Twenty CRM Trigger node', () => {
 		expect(notice?.displayName).toContain('even though Twenty labels it optional');
 		expect(notice?.displayName).toContain('requires signed deliveries');
 		expect(node.methods.credentialTest).toMatchObject({
-			twentyApiCredentialTest: expect.any(Function),
 			twentyWebhookCredentialTest: expect.any(Function),
 		});
+		expect(node.webhookMethods.default).toMatchObject({
+			checkExists: expect.any(Function),
+			create: expect.any(Function),
+			delete: expect.any(Function),
+		});
+	});
+
+	it('acknowledges lifecycle hooks without mutating manually owned Twenty webhooks', async () => {
+		const lifecycle = new TwentyTrigger().webhookMethods.default;
+		const context = {} as IHookFunctions;
+
+		await expect(lifecycle.checkExists.call(context)).resolves.toBe(true);
+		await expect(lifecycle.create.call(context)).resolves.toBe(true);
+		await expect(lifecycle.delete.call(context)).resolves.toBe(true);
 	});
 
 	it('loads active standard and custom objects with All Objects first', async () => {

@@ -1,5 +1,6 @@
 import type {
 	ILoadOptionsFunctions,
+	IHookFunctions,
 	INodePropertyOptions,
 	INodeType,
 	INodeTypeDescription,
@@ -8,13 +9,12 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
-import { twentyApiCredentialTest, twentyWebhookCredentialTest } from './shared/credentialTest';
+import { twentyWebhookCredentialTest } from './shared/credentialTest';
 import { createObjectMetadataService } from './shared/metadata';
 import { parseTwentyWebhookEvent, TwentyWebhookError, verifyTwentyWebhook } from './shared/webhook';
 
 const ALL_OBJECTS = '*';
 
-// eslint-disable-next-line @n8n/community-nodes/webhook-lifecycle-complete, @n8n/community-nodes/node-usable-as-tool -- Registration is intentionally manual because Twenty v2.9 has no proven public management API; trigger nodes cannot be AI tools.
 export class TwentyTrigger implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Twenty CRM Trigger',
@@ -28,7 +28,7 @@ export class TwentyTrigger implements INodeType {
 		inputs: [],
 		outputs: [NodeConnectionTypes.Main],
 		credentials: [
-			{ name: 'twentyApi', required: true, testedBy: 'twentyApiCredentialTest' },
+			{ name: 'twentyApi', required: true },
 			{ name: 'twentyWebhookApi', required: true, testedBy: 'twentyWebhookCredentialTest' },
 		],
 		webhooks: [
@@ -70,8 +70,23 @@ export class TwentyTrigger implements INodeType {
 		],
 	};
 
+	/** Twenty webhooks are owned by the user and registered manually. */
+	webhookMethods = {
+		default: {
+			async checkExists(this: IHookFunctions): Promise<boolean> {
+				return true;
+			},
+			async create(this: IHookFunctions): Promise<boolean> {
+				return true;
+			},
+			async delete(this: IHookFunctions): Promise<boolean> {
+				return true;
+			},
+		},
+	};
+
 	methods = {
-		credentialTest: { twentyApiCredentialTest, twentyWebhookCredentialTest },
+		credentialTest: { twentyWebhookCredentialTest },
 		loadOptions: {
 			async getTriggerObjects(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				const objects = await createObjectMetadataService(this).getObjects();

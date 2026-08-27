@@ -41,11 +41,11 @@ if (!isValidN8nPackageName(packageJson.name ?? '')) {
 if (packageJson.name !== '@blackswampai/n8n-nodes-twentycrm') {
 	fail('package.json name must match the approved @blackswampai/n8n-nodes-twentycrm identity');
 }
-if (packageJson.version !== '0.1.2') {
-	fail('package.json version must be exactly 0.1.2 for this release candidate');
+if (packageJson.version !== '0.1.3') {
+	fail('package.json version must be exactly 0.1.3 for this release candidate');
 }
-if (!/^## 0\.1\.2$/m.test(changelog)) {
-	fail('CHANGELOG.md must contain a real 0.1.2 release entry');
+if (!/^## 0\.1\.3$/m.test(changelog)) {
+	fail('CHANGELOG.md must contain a real 0.1.3 release entry');
 }
 if (
 	packageLock.version !== packageJson.version ||
@@ -208,9 +208,11 @@ if (webhookCredentialSource.includes('credential-test-required')) {
 	fail('Twenty Webhook API credential must not suppress the credential-test-required rule');
 }
 for (const statement of [
-	"trigger.description.credentials?.[0]?.testedBy !== 'twentyApiCredentialTest'",
+	'node.description.credentials?.[0]?.testedBy !== undefined',
+	"typeof credential.test?.request?.baseURL !== 'string'",
+	"credential.test?.rules?.[0]?.type !== 'responseSuccessBody'",
+	'trigger.description.credentials?.[0]?.testedBy !== undefined',
 	"trigger.description.credentials?.[1]?.testedBy !== 'twentyWebhookCredentialTest'",
-	"typeof trigger.methods?.credentialTest?.twentyApiCredentialTest !== 'function'",
 	"typeof trigger.methods?.credentialTest?.twentyWebhookCredentialTest !== 'function'",
 ]) {
 	if (!nodeLoadSmoke.includes(statement))

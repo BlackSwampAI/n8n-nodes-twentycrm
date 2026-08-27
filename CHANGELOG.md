@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.1.3
+
+- Add a Portal-compatible credential-class GraphQL connectivity probe with normalized Twenty root URLs and response validation.
+- Align credential requests, manual webhook lifecycle ownership, node errors, and test naming with the current n8n community-package scanner.
+- Update the n8n node development CLI to 0.45.4.
+
 ## 0.1.2
 
 - Restore Metadata GraphQL discovery on Twenty v2.35 while retaining compatibility with the pinned v2.9 schema.

@@ -1,4 +1,3 @@
-/* eslint-disable @n8n/community-nodes/require-node-api-error -- This pure helper has no n8n execution context. */
 const PASTED_ENDPOINT_SUFFIXES = ['/rest/metadata', '/metadata', '/graphql', '/rest'];
 
 export interface TwentyApiUrls {

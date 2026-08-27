@@ -1,4 +1,5 @@
 import type { ILoadOptionsFunctions } from 'n8n-workflow';
+import { NodeApiError } from 'n8n-workflow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -308,5 +309,32 @@ describe('Twenty metadata discovery', () => {
 			.catch((caught) => caught);
 		expect(String(error)).toContain('invalid object connection');
 		expect(String(error)).not.toContain('must-not-leak');
+	});
+
+	it('preserves sanitized transport errors and sanitizes unexpected discovery failures', async () => {
+		const context = {
+			getNode: () => ({ name: 'Twenty CRM', type: 'twenty', typeVersion: 1, position: [0, 0] }),
+		} as unknown as ILoadOptionsFunctions;
+		const transportError = new NodeApiError(
+			context.getNode(),
+			{},
+			{
+				message: 'Unable to reach the Twenty API',
+				description: 'Check the configured Base URL.',
+			},
+		);
+		requestMock.mockRejectedValueOnce(transportError);
+
+		const preserved = await createObjectMetadataService(context)
+			.getObjects()
+			.catch((error: unknown) => error);
+		expect(preserved).toBe(transportError);
+
+		requestMock.mockRejectedValueOnce(new Error('private upstream detail'));
+		const sanitized = await createObjectMetadataService(context)
+			.getObjects()
+			.catch((error: unknown) => error);
+		expect(String(sanitized)).toContain('Unable to discover the Twenty workspace schema.');
+		expect(String(sanitized)).not.toContain('private upstream detail');
 	});
 });
