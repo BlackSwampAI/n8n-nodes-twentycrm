@@ -10,6 +10,38 @@ import type {
 import { createObjectMetadataService } from './metadata';
 import { twentyApiRequest } from './request';
 
+export type FixedRecordResource = 'company' | 'person' | 'opportunity' | 'task' | 'note';
+
+const FIXED_OBJECTS: Readonly<Record<FixedRecordResource, NormalizedObjectDefinition>> = {
+	company: fixedObject('company', 'companies', 'Company', 'Companies'),
+	person: fixedObject('person', 'people', 'Person', 'People'),
+	opportunity: fixedObject('opportunity', 'opportunities', 'Opportunity', 'Opportunities'),
+	task: fixedObject('task', 'tasks', 'Task', 'Tasks'),
+	note: fixedObject('note', 'notes', 'Note', 'Notes'),
+};
+
+function fixedObject(
+	apiNameSingular: FixedRecordResource,
+	apiNamePlural: string,
+	labelSingular: string,
+	labelPlural: string,
+): NormalizedObjectDefinition {
+	return {
+		id: `fixed:${apiNameSingular}`,
+		apiNameSingular,
+		apiNamePlural,
+		labelSingular,
+		labelPlural,
+		isActive: true,
+		isRemote: false,
+		isSystem: false,
+		isReadOnly: false,
+		isCreatable: true,
+		isSearchable: true,
+		fields: [],
+	};
+}
+
 const MAX_PAGE_SIZE = 200;
 const MAX_PAGES = 1000;
 
@@ -53,6 +85,33 @@ function assertWritableObject(object: NormalizedObjectDefinition): void {
 			'The selected Twenty object is read-only and cannot be changed. Choose a writable workspace object.',
 		);
 	}
+}
+
+function assertCreatableObject(object: NormalizedObjectDefinition): void {
+	if (object.isCreatable === false || object.isReadOnly) {
+		throw new TwentyRecordResponseError(
+			'The selected Twenty object does not allow record creation. Choose a creatable workspace object.',
+		);
+	}
+}
+
+export function createFixedRecordService(
+	context: IExecuteFunctions,
+	resource: FixedRecordResource,
+): RecordService {
+	const descriptor = FIXED_OBJECTS[resource];
+	const metadata: ObjectMetadataService = {
+		async getObject(apiName) {
+			if (apiName !== resource) {
+				throw new TwentyRecordResponseError('The fixed Twenty resource is invalid.');
+			}
+			return descriptor;
+		},
+		async getObjects() {
+			return [descriptor];
+		},
+	};
+	return createRecordService(context, metadata);
 }
 
 function parseSingle(response: unknown, apiName: string): TwentyRecord {
@@ -126,12 +185,13 @@ export function createRecordService(
 ): RecordService {
 	async function objectFor(
 		apiName: string,
-		options: { requireWritable?: boolean } = {},
+		options: { requireWritable?: boolean; requireCreatable?: boolean } = {},
 	): Promise<NormalizedObjectDefinition> {
 		const object = await metadata.getObject(apiName);
 		try {
 			assertSupportedObject(object);
 			if (options.requireWritable) assertWritableObject(object);
+			if (options.requireCreatable) assertCreatableObject(object);
 			return object;
 		} catch (error) {
 			if (error instanceof TwentyRecordResponseError) {
@@ -172,7 +232,10 @@ export function createRecordService(
 	return {
 		async create(objectApiName, input) {
 			const body = safeInput(input);
-			const object = await objectFor(objectApiName, { requireWritable: true });
+			const object = await objectFor(objectApiName, {
+				requireWritable: true,
+				requireCreatable: true,
+			});
 			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}`;
 			const response = await twentyApiRequest(context, {
 				method: 'POST',

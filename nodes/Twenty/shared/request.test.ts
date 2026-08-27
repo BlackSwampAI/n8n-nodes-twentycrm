@@ -234,4 +234,20 @@ describe('twentyApiRequest', () => {
 		expect(serialized).not.toContain('private-record-value');
 		expect(serialized).not.toContain('Authorization');
 	});
+
+	it('reports an unrecognized HTTP-200 GraphQL error as a safe compatibility rejection', async () => {
+		const mocked = createContext();
+		mocked.httpRequestWithAuthentication.mockResolvedValue({
+			errors: [{ message: 'Cannot query field with private schema details', path: ['private'] }],
+		});
+
+		const error = await twentyApiRequest(mocked.context, {
+			method: 'POST',
+			surface: 'metadataGraphql',
+		}).catch((failure: unknown) => failure);
+		expect(error).toBeInstanceOf(NodeApiError);
+		expect((error as Error).message).toBe('Twenty GraphQL request was rejected');
+		expect((error as NodeApiError).description).toContain('schema may be incompatible');
+		expect(JSON.stringify(error)).not.toContain('private schema details');
+	});
 });

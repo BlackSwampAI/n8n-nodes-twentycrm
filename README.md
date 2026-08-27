@@ -33,7 +33,7 @@ npm view @blackswampai/n8n-nodes-twentycrm dist.attestations
 
 ## Compatibility
 
-The package supports configurable Twenty Cloud and self-hosted root URLs. Its automated live API qualification is pinned to Twenty v2.9.0 by immutable image digest. The package declares Node.js `>=22.22.0` and `n8n-workflow` as a host-provided peer.
+The package supports configurable Twenty Cloud and self-hosted root URLs. Metadata discovery has regression coverage for the legacy Twenty v2.9 and modern v2.35 GraphQL shapes; the retained automated live API harness remains pinned to v2.9.0 by immutable image digest. The package declares Node.js `>=22.22.0` and `n8n-workflow` as a host-provided peer.
 
 This is not a broad Twenty or n8n version matrix, and the package is not yet n8n-verified. See [Compatibility and qualification](docs/COMPATIBILITY.md) and the [release-candidate UI checklist](docs/QUALIFICATION.md).
 
@@ -57,7 +57,7 @@ The action node provides:
 
 Create and Update default to metadata-driven Field Mapping. Fixed resources show common fields first and keep remaining writable/custom fields under Additional Fields. Generic Record retains full dynamic schema ordering. Known compound values are reconstructed for Twenty's REST API; JSON input remains available as an advanced fallback. Get Many supports bounded Limit/Return All cursor pagination and raw Twenty REST filter/order expressions.
 
-All resources reuse shared metadata, authenticated transport, pagination, field mapping, and sanitized errors. Transient retries are conservative and idempotency-gated; record mutations are never automatically retried. Schema creation or modification is not exposed as a node operation.
+All resources reuse shared authenticated transport, pagination, field mapping, and sanitized errors. Fixed-resource REST routing uses stable shared descriptors, so Get/Get Many and JSON-input CRUD do not depend on metadata discovery. Generic Record operations and every field-mapped write remain metadata-driven. Transient retries are conservative and idempotency-gated; record mutations are never automatically retried. Schema creation or modification is not exposed as a node operation.
 
 The **Twenty CRM Trigger** receives Record Created, Record Updated, and Record Deleted events for one active standard/custom object or All Objects. Registration is manual:
 

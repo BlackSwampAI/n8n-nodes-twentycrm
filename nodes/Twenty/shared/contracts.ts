@@ -12,10 +12,11 @@ export interface NormalizedObjectDefinition {
 	description?: string;
 	icon?: string;
 	isActive: boolean;
-	isCustom: boolean;
+	isCustom?: boolean;
 	isRemote: boolean;
 	isSystem: boolean;
 	isReadOnly: boolean;
+	isCreatable?: boolean;
 	isSearchable: boolean;
 	fields: NormalizedFieldDefinition[];
 }
@@ -29,7 +30,7 @@ export interface NormalizedFieldDefinition {
 	description?: string;
 	icon?: string;
 	isActive: boolean;
-	isCustom: boolean;
+	isCustom?: boolean;
 	isNullable: boolean;
 	isUnique: boolean;
 	isRequired: boolean;

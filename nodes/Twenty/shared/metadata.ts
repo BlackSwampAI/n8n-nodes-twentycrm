@@ -8,6 +8,7 @@ import type {
 	NormalizedRelationEndpoint,
 	ObjectMetadataService,
 } from './contracts';
+import { classifyTwentyGraphqlResponse, createTwentyNodeApiError } from './errors';
 import { twentyApiRequest } from './request';
 
 type MetadataContext = IExecuteFunctions | ILoadOptionsFunctions;
@@ -15,7 +16,7 @@ type UnknownRecord = Record<string, unknown>;
 
 const MAX_PAGES = 100;
 
-export const OBJECT_METADATA_QUERY = `query TwentyObjectMetadata($after: ConnectionCursor) {
+export const LEGACY_OBJECT_METADATA_QUERY = `query TwentyObjectMetadata($after: ConnectionCursor) {
   objects(paging: { first: 1000, after: $after }) {
     edges {
       node {
@@ -44,6 +45,39 @@ export const OBJECT_METADATA_QUERY = `query TwentyObjectMetadata($after: Connect
     pageInfo { hasNextPage endCursor }
   }
 }`;
+
+export const MODERN_OBJECT_METADATA_QUERY = `query TwentyObjectMetadata($after: ConnectionCursor) {
+  objects(paging: { first: 1000, after: $after }) {
+    edges {
+      node {
+        id universalIdentifier nameSingular namePlural labelSingular labelPlural
+        description icon isRemote isActive isSystem isUIEditable isUICreatable isSearchable
+        fieldsList {
+          id universalIdentifier type name label description icon isActive isSystem
+          isUIEditable isNullable isUnique defaultValue options settings
+          relation {
+            type
+            sourceObjectMetadata { id nameSingular namePlural }
+            targetObjectMetadata { id nameSingular namePlural }
+            sourceFieldMetadata { id name }
+            targetFieldMetadata { id name }
+          }
+          morphRelations {
+            type
+            sourceObjectMetadata { id nameSingular namePlural }
+            targetObjectMetadata { id nameSingular namePlural }
+            sourceFieldMetadata { id name }
+            targetFieldMetadata { id name }
+          }
+        }
+      }
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}`;
+
+/** Retained for existing imports and the pinned v2.9 live harness. */
+export const OBJECT_METADATA_QUERY = LEGACY_OBJECT_METADATA_QUERY;
 
 export class TwentyMetadataError extends Error {
 	constructor(message: string) {
@@ -74,6 +108,10 @@ function boolean(value: unknown, subject: string): boolean {
 		throw new TwentyMetadataError(`Twenty metadata returned an invalid ${subject}.`);
 	}
 	return value;
+}
+
+function optionalBoolean(value: unknown, subject: string): boolean | undefined {
+	return value === undefined ? undefined : boolean(value, subject);
 }
 
 function relationEndpoint(
@@ -129,11 +167,14 @@ export function normalizeTwentyField(value: unknown): NormalizedFieldDefinition 
 		description: optionalString(field.description),
 		icon: optionalString(field.icon),
 		isActive: boolean(field.isActive, 'field active flag'),
-		isCustom: boolean(field.isCustom, 'field custom flag'),
+		isCustom: optionalBoolean(field.isCustom, 'field custom flag'),
 		isNullable,
 		isUnique: boolean(field.isUnique, 'field unique flag'),
 		isRequired: !isNullable,
-		isReadOnly: boolean(field.isUIReadOnly, 'field read-only flag'),
+		isReadOnly:
+			field.isUIEditable === undefined
+				? boolean(field.isUIReadOnly, 'field read-only flag')
+				: !boolean(field.isUIEditable, 'field editable flag'),
 		isSystem: boolean(field.isSystem, 'field system flag'),
 		...(Object.prototype.hasOwnProperty.call(field, 'defaultValue')
 			? { defaultValue: field.defaultValue }
@@ -167,10 +208,17 @@ export function normalizeTwentyObject(value: unknown): NormalizedObjectDefinitio
 		description: optionalString(object.description),
 		icon: optionalString(object.icon),
 		isActive: boolean(object.isActive, 'object active flag'),
-		isCustom: boolean(object.isCustom, 'object custom flag'),
+		isCustom: optionalBoolean(object.isCustom, 'object custom flag'),
 		isRemote: boolean(object.isRemote, 'object remote flag'),
 		isSystem: boolean(object.isSystem, 'object system flag'),
-		isReadOnly: boolean(object.isUIReadOnly, 'object read-only flag'),
+		isReadOnly:
+			object.isUIEditable === undefined
+				? boolean(object.isUIReadOnly, 'object read-only flag')
+				: !boolean(object.isUIEditable, 'object editable flag'),
+		isCreatable:
+			object.isUICreatable === undefined
+				? !boolean(object.isUIReadOnly, 'object read-only flag')
+				: boolean(object.isUICreatable, 'object creatable flag'),
 		isSearchable: boolean(object.isSearchable, 'object searchable flag'),
 		fields: object.fieldsList.map(normalizeTwentyField),
 	};
@@ -209,14 +257,29 @@ export async function discoverTwentyObjects(
 	const objects: NormalizedObjectDefinition[] = [];
 	const cursors = new Set<string>();
 	let after: string | undefined;
+	let query = MODERN_OBJECT_METADATA_QUERY;
 
 	for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
-		const response = await twentyApiRequest(context, {
+		let response = await twentyApiRequest(context, {
 			method: 'POST',
 			surface: 'metadataGraphql',
 			retry: 'safe',
-			body: { query: OBJECT_METADATA_QUERY, variables: { after: after ?? null } as IDataObject },
+			body: { query, variables: { after: after ?? null } as IDataObject },
+			allowGraphqlErrors: query === MODERN_OBJECT_METADATA_QUERY,
 		});
+		const modernFailure = classifyTwentyGraphqlResponse(response);
+		if (modernFailure && query === MODERN_OBJECT_METADATA_QUERY) {
+			if (modernFailure.kind === 'authentication' || modernFailure.kind === 'permission') {
+				throw createTwentyNodeApiError(context.getNode(), modernFailure);
+			}
+			query = LEGACY_OBJECT_METADATA_QUERY;
+			response = await twentyApiRequest(context, {
+				method: 'POST',
+				surface: 'metadataGraphql',
+				retry: 'safe',
+				body: { query, variables: { after: after ?? null } as IDataObject },
+			});
+		}
 		const page = parsePage(response);
 		objects.push(...page.objects);
 		if (!page.hasNextPage) {
