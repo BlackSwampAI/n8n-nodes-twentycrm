@@ -6,7 +6,7 @@ The local integration harness pins Twenty v2.9.0 by tag and verified image diges
 
 The credential accepts absolute HTTP or HTTPS root URLs, allowing HTTPS Twenty Cloud URLs and HTTP or HTTPS self-hosted installations. URL normalization, authenticated request construction, safe error normalization, bounded retry policy, and the read-only Core GraphQL credential probe are unit-tested with mocks and exercised against the pinned self-hosted stack. Twenty error payloads and `Retry-After` behavior are treated defensively rather than as a stable vendor-specific contract.
 
-Compatibility claims will be added only after the relevant automated and hands-on checks pass. Until then, the repository and npm metadata must not imply production support or n8n verification.
+n8n verified-node distribution is established, but it must not be presented as evidence of broader Twenty API, deployment, or runtime compatibility. Those claims require the relevant automated and hands-on checks.
 
 Metadata discovery prefers the v2.35 `isUIEditable`/`isUICreatable` shape and safely falls back to the legacy v2.9 `isUIReadOnly`/`isCustom` shape when the modern query is rejected. Because v2.35 no longer exposes a direct object or field `isCustom` flag, that classification is retained when the legacy API supplies it and otherwise remains unknown; the node does not infer it from unrelated flags. Fixed Company, Person, Opportunity, Task, and Note REST routes use shared explicit descriptors, so their reads and JSON-input CRUD are independent of Metadata GraphQL. Generic Record, Schema Object, selectors, and field mapping still require metadata access.
 
