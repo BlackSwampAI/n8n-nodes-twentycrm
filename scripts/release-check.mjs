@@ -193,7 +193,6 @@ const publishCommands = [
 	'npm run smoke:load',
 	'npm run smoke:install',
 	'npm run release',
-	'npm run scan:published',
 ];
 const workflowRunCommands = [...publishWorkflow.matchAll(/^\s*(?:-\s*)?run:\s*(.+)$/gm)].map(
 	(match) => match[1].trim(),
@@ -207,6 +206,16 @@ for (const command of publishCommands) {
 if (workflowRunCommands.filter((command) => command === 'npm run release').length !== 1) {
 	fail('publish workflow must run npm run release exactly once');
 }
+const [publishJob, verifyPublishedJob = ''] = publishWorkflow.split(/\n  verify-published:\s*\n/);
+if (
+	!/needs:\s*publish/.test(verifyPublishedJob) ||
+	!verifyPublishedJob.includes('npm run scan:published')
+)
+	fail('verify-published must depend on publish and run the published scanner');
+if (publishJob.includes('npm run scan:published') || verifyPublishedJob.includes('npm run release'))
+	fail('publication and published-package verification must remain separate jobs');
+if (/id-token:\s*write/.test(verifyPublishedJob))
+	fail('verify-published must not receive id-token: write');
 if (publishWorkflow.includes('secrets.NPM_TOKEN'))
 	fail('established package publishing must use Trusted Publisher OIDC without NPM_TOKEN');
 if (!publishWorkflow.includes('node scripts/prepare-npm-auth.mjs'))
@@ -237,7 +246,7 @@ if (hasPlaceholder(readme)) fail('README still contains a placeholder');
 for (const statement of [
 	'unofficial Black Swamp AI community integration',
 	'not affiliated with, sponsored by, endorsed by, or maintained by Twenty.com, PBC',
-	'1642be86f5c17217372366b9e2a950ebf88a53db',
+	'ee6a5c37cd9dc420934c02cf32256234f7e96d01',
 ]) {
 	if (!readme.includes(statement)) fail(`README is missing required notice: ${statement}`);
 }
