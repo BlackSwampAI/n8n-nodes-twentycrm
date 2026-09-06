@@ -165,7 +165,7 @@ describe('local Twenty Compose harness', () => {
 
 describe('local Twenty harness helpers', () => {
 	it('continues owned schema cleanup after phase failures and trusts final absence', async () => {
-		const phases = [];
+		const phases: string[] = [];
 		let discovery = 0;
 		await expect(
 			cleanupOwnedCustomSchema({
@@ -192,7 +192,7 @@ describe('local Twenty harness helpers', () => {
 	});
 
 	it('does not mutate metadata without proven ownership and fails if absence is unverified', async () => {
-		const phases = [];
+		const phases: string[] = [];
 		await expect(
 			cleanupOwnedCustomSchema({
 				cleanupRecords: async () => phases.push('records'),
@@ -284,7 +284,7 @@ describe('local Twenty harness helpers', () => {
 
 	it('accepts expected GraphQL data and rejects HTTP-200 GraphQL failures safely', () => {
 		expect(() =>
-			validateGraphqlPayload('Core GraphQL', { data: { people: { edges: [] } } }, (data) =>
+			validateGraphqlPayload('Core GraphQL', { data: { people: { edges: [] } } }, (data: unknown) =>
 				Array.isArray((data as { people?: { edges?: unknown } })?.people?.edges),
 			),
 		).not.toThrow();

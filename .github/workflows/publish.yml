@@ -9,6 +9,7 @@ jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     permissions:
       contents: read
@@ -24,6 +25,9 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
 
+      - name: Use the lockfile npm version
+        run: npm install --global npm@11.19.0
+
       - name: Verify npm supports Trusted Publishing
         run: node scripts/verify-npm-version.mjs
 
@@ -35,13 +39,17 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run scan:source
       - run: npm run release:check
       - run: npm run package:check
       - run: npm run smoke:load
       - run: npm run smoke:install
 
+      - name: Prepare tokenless npm authentication
+        run: node scripts/prepare-npm-auth.mjs
+
       - name: Publish provenance-backed package
         run: npm run release
-        env:
-          # Temporary first-publication fallback. Leave absent after Trusted Publisher setup.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published package
+        run: npm run scan:published

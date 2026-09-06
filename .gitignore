@@ -1,6 +1,5 @@
 dist
 node_modules
-.codex/
 integration/twenty/.env
 integration/twenty/artifacts/
 integration/twenty/logs/

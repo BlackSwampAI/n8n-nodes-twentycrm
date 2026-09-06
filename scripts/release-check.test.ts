@@ -43,7 +43,7 @@ describe('release audit', () => {
 		).toBe('GitHub tag must exactly match package version v0.1.3');
 	});
 
-	it('pins the complete gate before one publish action without shell token materialization', () => {
+	it('pins the complete OIDC gate and postpublication scanner around one publish action', () => {
 		const workflow = readFileSync(resolve(root, '.github/workflows/publish.yml'), 'utf8');
 		expect(workflow).toContain('run: node scripts/verify-npm-version.mjs');
 		expect(workflow.indexOf('run: node scripts/verify-npm-version.mjs')).toBeLessThan(
@@ -58,11 +58,13 @@ describe('release audit', () => {
 			'npm run typecheck',
 			'npm test',
 			'npm run build',
+			'npm run scan:source',
 			'npm run release:check',
 			'npm run package:check',
 			'npm run smoke:load',
 			'npm run smoke:install',
 			'npm run release',
+			'npm run scan:published',
 		];
 		let previous = -1;
 		for (const command of commands) {
@@ -71,8 +73,39 @@ describe('release audit', () => {
 			previous = index;
 		}
 		expect(workflow.match(/run: npm run release$/gm)).toHaveLength(1);
-		expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}');
-		expect(workflow).not.toMatch(/npm config|_authToken|run:\s*\|/);
+		expect(workflow).toContain('node scripts/prepare-npm-auth.mjs');
+		expect(readFileSync(resolve(root, 'scripts/scan-published.mjs'), 'utf8')).toContain(
+			'has passed all security checks',
+		);
+		expect(workflow).not.toContain('secrets.NPM_TOKEN');
+		expect(workflow).not.toMatch(/npm config|_authToken/);
+		expect(workflow).toMatch(/timeout-minutes:\s*30/);
+	});
+
+	it('requires the adopted Template v2 marker and final documentation', () => {
+		const marker = JSON.parse(readFileSync(resolve(root, '.blackswamp/template.json'), 'utf8'));
+		expect(marker).toEqual({
+			schemaVersion: 1,
+			templateVersion: '2.0.0',
+			sourceRepository: 'https://github.com/christopherjnelson/n8n-community-node-template',
+		});
+		const releaseCheck = readFileSync(resolve(root, 'scripts/release-check.mjs'), 'utf8');
+		for (const path of [
+			'.github/pull_request_template.md',
+			'docs/BATCH_HANDOFF_TEMPLATE.md',
+			'docs/TEMPLATE_MIGRATIONS.md',
+			'docs/api-matrix.md',
+			'docs/testing.md',
+			'docs/branding.md',
+			'.codex/config.toml',
+			'.codex/agents/builder.toml',
+		]) {
+			expect(releaseCheck).toContain(path);
+		}
+		const builder = readFileSync(resolve(root, '.codex/agents/builder.toml'), 'utf8');
+		expect(builder).toContain('name = "builder"');
+		expect(builder).toContain('model = "gpt-5.6-sol"');
+		expect(builder).toContain('model_reasoning_effort = "low"');
 	});
 
 	it('requires the API credential-class test and local webhook credential test', () => {

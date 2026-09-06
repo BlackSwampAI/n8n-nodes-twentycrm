@@ -10,10 +10,12 @@ import {
 } from './errors';
 
 const node = {
+	id: 'test-node',
 	name: 'Twenty CRM',
 	type: 'twenty',
 	typeVersion: 1,
 	position: [0, 0] as [number, number],
+	parameters: {},
 };
 
 describe('Twenty error normalization', () => {

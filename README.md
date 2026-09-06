@@ -6,7 +6,7 @@
 
 An independent n8n community-node package for connecting Twenty CRM workflows to standard and custom objects, metadata-driven records, and signed record-event webhooks.
 
-> This is an unofficial Black Swamp AI community integration. It is not affiliated with, sponsored by, or endorsed by Twenty.com, PBC. Twenty and the Twenty logo are trademarks of Twenty.com, PBC.
+> This is an unofficial Black Swamp AI community integration. It is not affiliated with, sponsored by, endorsed by, or maintained by Twenty.com, PBC. The Twenty name and logo belong to their respective owner(s) and are used only to identify compatibility.
 
 [Installation](#installation) · [Compatibility](#compatibility) · [Credentials](#credentials) · [Operations](#operations) · [Troubleshooting](#troubleshooting) · [Black Swamp AI](https://blackswampai.com/n8n-nodes/twenty-crm/)
 
@@ -35,7 +35,7 @@ npm view @blackswampai/n8n-nodes-twentycrm dist.attestations
 
 The package supports configurable Twenty Cloud and self-hosted root URLs. Metadata discovery has regression coverage for the legacy Twenty v2.9 and modern v2.35 GraphQL shapes; the retained automated live API harness remains pinned to v2.9.0 by immutable image digest. The package declares Node.js `>=22.22.0` and `n8n-workflow` as a host-provided peer.
 
-This is not a broad Twenty or n8n version matrix, and the package is not yet n8n-verified. See [Compatibility and qualification](docs/COMPATIBILITY.md) and the [release-candidate UI checklist](docs/QUALIFICATION.md).
+This is not a broad Twenty or n8n version matrix, and the package is not yet n8n-verified. See [Compatibility and qualification](docs/COMPATIBILITY.md), the [API matrix](docs/api-matrix.md), and the [UI qualification checklist](docs/QUALIFICATION.md).
 
 ## Credentials
 
@@ -76,11 +76,13 @@ See [Troubleshooting](docs/TROUBLESHOOTING.md) for credential/network failures, 
 - [Twenty documentation](https://docs.twenty.com/)
 - [n8n community node documentation](https://docs.n8n.io/integrations/community-nodes/)
 - [Local Twenty harness](docs/LOCAL_TWENTY.md)
+- [Testing strategy and evidence](docs/testing.md)
+- [Branding and icon provenance](docs/branding.md)
 - [Black Swamp AI — Twenty CRM for n8n](https://blackswampai.com/n8n-nodes/twenty-crm/)
 - [Project issues](https://github.com/BlackSwampAI/n8n-nodes-twentycrm/issues)
 - [Release process](RELEASING.md)
 
-The packaged light and dark icons use the unmodified official Twenty 96×96 SVG from [`twentyhq/twenty` commit `1642be86f5c17217372366b9e2a950ebf88a53db`](https://github.com/twentyhq/twenty/blob/1642be86f5c17217372366b9e2a950ebf88a53db/packages/twenty-codex-plugin/assets/twenty-logo.svg). Use of that mark does not imply affiliation, sponsorship, or endorsement.
+The packaged light and dark icons use the unmodified official Twenty 96×96 SVG from [`twentyhq/twenty` commit `1642be86f5c17217372366b9e2a950ebf88a53db`](https://github.com/twentyhq/twenty/blob/1642be86f5c17217372366b9e2a950ebf88a53db/packages/twenty-codex-plugin/assets/twenty-logo.svg). Use of that mark does not imply affiliation, sponsorship, or endorsement. See [branding and icon provenance](docs/branding.md).
 
 ## License
 

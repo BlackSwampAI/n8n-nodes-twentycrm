@@ -1,4 +1,4 @@
-# Release-candidate UI qualification
+# UI qualification checklist
 
 Automated package checks cannot prove n8n editor rendering. Run this bounded checklist in an owner-controlled disposable n8n instance after installing the locally packed package. Do not use production CRM data.
 
