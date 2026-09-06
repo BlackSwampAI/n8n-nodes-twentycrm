@@ -107,6 +107,25 @@ describe('Twenty webhook security', () => {
 		});
 	});
 
+	it('verifies and parses the complete current sender envelope', () => {
+		const payload = {
+			eventName: 'person.updated',
+			objectMetadata: { id: 'synthetic-object', nameSingular: 'person' },
+			workspaceId: 'synthetic-workspace',
+			webhookId: 'synthetic-webhook',
+			eventDate: '2026-09-06T12:34:56.789Z',
+			record: { id: 'synthetic-record', name: 'Synthetic Person' },
+			updatedFields: ['name'],
+		};
+		const rawBody = Buffer.from(JSON.stringify(payload));
+		expect(() => verifyTwentyWebhook(rawBody, headers(rawBody), secret, now)).not.toThrow();
+		expect(parseTwentyWebhookEvent(payload)).toEqual({
+			payload,
+			event: 'updated',
+			objectApiName: 'person',
+		});
+	});
+
 	it.each([
 		[null],
 		[{}],

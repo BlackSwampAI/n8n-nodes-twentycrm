@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.4
+
+- Align verified-node installation guidance and compatibility documentation with the current package status.
+- Record the current Twenty sender envelope/signature contract and its discrepancy with the public webhook payload example.
+- Retry the official post-publication scanner only for bounded, known npm metadata or provenance-source 404 propagation states.
 
 ## 0.1.3
 

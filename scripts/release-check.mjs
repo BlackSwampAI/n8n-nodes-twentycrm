@@ -237,7 +237,7 @@ if (hasPlaceholder(readme)) fail('README still contains a placeholder');
 for (const statement of [
 	'unofficial Black Swamp AI community integration',
 	'not affiliated with, sponsored by, endorsed by, or maintained by Twenty.com, PBC',
-	'1642be86f5c17217372366b9e2a950ebf88a53db',
+	'ee6a5c37cd9dc420934c02cf32256234f7e96d01',
 ]) {
 	if (!readme.includes(statement)) fail(`README is missing required notice: ${statement}`);
 }

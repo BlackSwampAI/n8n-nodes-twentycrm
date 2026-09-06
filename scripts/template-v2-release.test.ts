@@ -59,13 +59,26 @@ describe('published scanner retry policy', () => {
 	it('retries only recognized propagation failures for the exact version', () => {
 		const analysis404 = `Package ${packageSpec} has failed security checks\nReason: Analysis failed: Request failed with status code 404`;
 		const metadata = `Package ${packageSpec} has failed security checks\nReason: No package metadata found for version ${packageJson.version}`;
+		const provenance404 = `Package ${packageSpec} has failed security checks\nReason: Could not fetch the source repository recorded in the package's npm provenance (Request failed with status code 404)`;
 		expect(isLikelyPropagationFailure(analysis404, packageSpec)).toBe(true);
 		expect(isLikelyPropagationFailure(metadata, packageSpec)).toBe(true);
+		expect(isLikelyPropagationFailure(provenance404, packageSpec)).toBe(true);
 		expect(
 			isLikelyPropagationFailure(
 				`Package ${packageSpec} has failed security checks\nReason: No package metadata found for version 0.1.2`,
 				packageSpec,
 			),
 		).toBe(false);
+		for (const reason of [
+			"Could not fetch the source repository recorded in the package's npm provenance (Request failed with status code 403)",
+			'ESLint violations found',
+			'Request failed with status code 429',
+			'ETIMEDOUT while fetching source',
+			'Package policy rejected',
+		]) {
+			const output = `Package ${packageSpec} has failed security checks\nReason: ${reason}`;
+			expect(isLikelyPropagationFailure(output, packageSpec)).toBe(false);
+			expect(isDeterministicSecurityFailure(output, packageSpec)).toBe(true);
+		}
 	});
 });

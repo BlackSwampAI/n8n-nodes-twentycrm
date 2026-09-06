@@ -1,6 +1,6 @@
 # Compatibility and qualification
 
-The project has live-qualified a pinned self-hosted Twenty v2.9.0 development matrix and has fixture-based Metadata GraphQL compatibility coverage for Twenty v2.35.0, but not a broad operational version matrix.
+The project has live-qualified a pinned self-hosted Twenty v2.9.0 development matrix and has fixture-based Metadata GraphQL compatibility coverage for Twenty v2.35.0, but not a broad operational version matrix. The package is available through n8n's verified community-node discovery; that distribution status is separate from the runtime matrix.
 
 The local integration harness pins Twenty v2.9.0 by tag and verified image digest, with explicitly versioned PostgreSQL and Redis images rather than `latest`. CI covers the Node.js 22.22.0 floor and Node.js 24. Twenty Cloud has not been live-qualified, and neither n8n verification nor compatibility with every n8n/Twenty release is claimed.
 
@@ -17,3 +17,5 @@ The v2.9.0 harness qualifies authenticated routing to Core GraphQL and Metadata 
 The expanded local matrix also creates a uniquely owned custom object and writable scalar field through the public v2.9 Metadata GraphQL API, rediscovers them through compiled metadata normalization, and exercises generic Record Create/Get/Get Many/Update/Delete. Cleanup deletes the owned record, field, and object and verifies absence. The mutation path is restricted to a loopback Twenty URL and prints no workspace identifiers, object or field API names, labels, record or schema values, payloads, or counts. This does not establish a broad operational support matrix. See [Local Twenty integration harness](LOCAL_TWENTY.md).
 
 Native webhook qualification uses a deterministic Linux Docker host-gateway alias on the pinned v2.9 worker and Twenty's supported outbound safe-mode configuration. A signed native Twenty-to-n8n production delivery has passed on this matrix. Registration remains manual, and no private management API is used. See the [UI qualification checklist](QUALIFICATION.md) for the bounded editor inspection.
+
+The current public webhook page describes an `event`/`data`/`timestamp` body. In contrast, current official sender source at commit `ee6a5c37cd9dc420934c02cf32256234f7e96d01` still emits the `eventName`/`objectMetadata`/`workspaceId`/`webhookId`/`eventDate`/`record` envelope used by the pinned live fixture and signs the serialized payload without its secret using a 13-digit millisecond timestamp. The trigger intentionally follows the observed/current implementation; no current-version live delivery is claimed solely from source inspection.

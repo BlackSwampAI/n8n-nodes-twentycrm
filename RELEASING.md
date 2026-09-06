@@ -1,6 +1,6 @@
 # Releasing `@blackswampai/n8n-nodes-twentycrm`
 
-This is an established npm package. Version 0.1.3 is published with provenance. Never publish locally: an authorized release must come from the tag-only `.github/workflows/publish.yml` through npm Trusted Publishing and GitHub provenance.
+This is an established npm package. Never publish locally: an authorized release must come from the tag-only `.github/workflows/publish.yml` through npm Trusted Publishing and GitHub provenance.
 
 ## Release gate
 
@@ -33,6 +33,6 @@ Only after explicit authorization, create and push an immutable annotated `v<pac
 
 ## Verification
 
-Before packaging, `npm run scan:source` applies official scanner 0.34.0 rules to source and separately to built JavaScript plus `package.json`. After publication, `npm run scan:published` checks registry metadata, provenance, attested public source, and the downloaded package. It retries only bounded recognized propagation failures and requires explicit success text; scanner exit status alone is insufficient.
+Before packaging, `npm run scan:source` applies official scanner 0.34.0 rules to source and separately to built JavaScript plus `package.json`. After publication, `npm run scan:published` checks registry metadata, provenance, attested public source, and the downloaded package. Its bounded retries allow only the observed exact-version metadata absence, analysis 404, and provenance source-repository 404 propagation states. A 403, policy/lint finding, timeout, rate limit, or unrelated failure exits immediately. Explicit success text is required; scanner exit status alone is insufficient.
 
 After the workflow completes, verify the exact npm version, `latest` dist-tag, public package contents, provenance attestation, immutable tag, GitHub release, and scanner result. Creator Portal submission is a separate external action requiring owner authorization.

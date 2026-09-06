@@ -12,16 +12,16 @@ An independent n8n community-node package for connecting Twenty CRM workflows to
 
 ## Installation
 
-Install the package in a self-hosted n8n instance:
+Install the verified community node from the n8n editor:
 
-1. Open **Settings → Community Nodes**.
-2. Select **Install** and enter:
+1. Open the **Canvas**, then open the nodes panel.
+2. Search for **Twenty CRM**.
+3. Select **More from the community**, then choose **Install**.
 
-```text
-@blackswampai/n8n-nodes-twentycrm
-```
+See n8n's [verified community-node installation guide](https://docs.n8n.io/integrations/community-nodes/installation-and-management/install-verified-community-nodes/) for current requirements.
 
-3. Review n8n's community-node warning and confirm the installation.
+Self-hosted administrators who need the package fallback can install the exact package
+`@blackswampai/n8n-nodes-twentycrm` through the instance's supported community-node management.
 
 For development, use Node.js 22.22.0 or newer, clone the repository, then run `npm ci`, `npm run build`, and `npm run smoke:install`.
 
@@ -35,7 +35,7 @@ npm view @blackswampai/n8n-nodes-twentycrm dist.attestations
 
 The package supports configurable Twenty Cloud and self-hosted root URLs. Metadata discovery has regression coverage for the legacy Twenty v2.9 and modern v2.35 GraphQL shapes; the retained automated live API harness remains pinned to v2.9.0 by immutable image digest. The package declares Node.js `>=22.22.0` and `n8n-workflow` as a host-provided peer.
 
-This is not a broad Twenty or n8n version matrix, and the package is not yet n8n-verified. See [Compatibility and qualification](docs/COMPATIBILITY.md), the [API matrix](docs/api-matrix.md), and the [UI qualification checklist](docs/QUALIFICATION.md).
+This is not a broad Twenty or n8n version matrix. The package is available through n8n's verified community-node discovery; this status does not expand the runtime compatibility evidence above. See [Compatibility and qualification](docs/COMPATIBILITY.md), the [API matrix](docs/api-matrix.md), and the [UI qualification checklist](docs/QUALIFICATION.md).
 
 ## Credentials
 
@@ -82,7 +82,7 @@ See [Troubleshooting](docs/TROUBLESHOOTING.md) for credential/network failures, 
 - [Project issues](https://github.com/BlackSwampAI/n8n-nodes-twentycrm/issues)
 - [Release process](RELEASING.md)
 
-The packaged light and dark icons use the unmodified official Twenty 96×96 SVG from [`twentyhq/twenty` commit `1642be86f5c17217372366b9e2a950ebf88a53db`](https://github.com/twentyhq/twenty/blob/1642be86f5c17217372366b9e2a950ebf88a53db/packages/twenty-codex-plugin/assets/twenty-logo.svg). Use of that mark does not imply affiliation, sponsorship, or endorsement. See [branding and icon provenance](docs/branding.md).
+The packaged light and dark icons use the unmodified official Twenty 96×96 SVG, confirmed unchanged at [`twentyhq/twenty` commit `ee6a5c37cd9dc420934c02cf32256234f7e96d01`](https://github.com/twentyhq/twenty/blob/ee6a5c37cd9dc420934c02cf32256234f7e96d01/packages/twenty-codex-plugin/assets/twenty-logo.svg). Use of that mark does not imply affiliation, sponsorship, or endorsement. See [branding and icon provenance](docs/branding.md).
 
 ## License
 

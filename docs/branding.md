@@ -1,8 +1,8 @@
 # Branding and Twenty icon provenance
 
-The action and trigger icons use the unmodified official Twenty 96×96 SVG from the Twenty-controlled `twentyhq/twenty` repository at immutable commit `1642be86f5c17217372366b9e2a950ebf88a53db`, accessed 2026-09-06:
+The action and trigger icons use the unmodified official Twenty 96×96 SVG from the Twenty-controlled `twentyhq/twenty` repository, reconfirmed at immutable commit `ee6a5c37cd9dc420934c02cf32256234f7e96d01`, accessed 2026-09-06:
 
-`https://raw.githubusercontent.com/twentyhq/twenty/1642be86f5c17217372366b9e2a950ebf88a53db/packages/twenty-codex-plugin/assets/twenty-logo.svg`
+`https://raw.githubusercontent.com/twentyhq/twenty/ee6a5c37cd9dc420934c02cf32256234f7e96d01/packages/twenty-codex-plugin/assets/twenty-logo.svg`
 
 SHA-256: `0016254102d200b1598b4c1ecb88dfa398ec3a34db0616ed9441eda887ff2fef`.
 
