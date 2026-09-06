@@ -78,15 +78,9 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(node.description.usableAsTool).toBe(true);
 		expect(node.description.credentials).toEqual([{ name: 'twentyApi', required: true }]);
 		const resource = node.description.properties.find(({ name }) => name === 'resource');
-		expect(resource?.options?.map((option) => option.value)).toEqual([
-			'company',
-			'note',
-			'opportunity',
-			'person',
-			'record',
-			'schemaObject',
-			'task',
-		]);
+		expect(
+			resource?.options?.flatMap((option) => ('value' in option ? [option.value] : [])),
+		).toEqual(['company', 'note', 'opportunity', 'person', 'record', 'schemaObject', 'task']);
 		expect(resource?.options).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ value: 'company' }),
@@ -314,7 +308,7 @@ describe('Twenty CRM Schema Object node', () => {
 			}),
 		);
 		serviceMock.mockReturnValue({ getObject, getObjects: vi.fn() });
-		const genericParameter = vi.fn((name: string) =>
+		const genericParameter = vi.fn((name: string): unknown =>
 			name === 'resource' ? 'record' : name === 'objectApiName' ? 'vehicle' : undefined,
 		);
 		const genericContext = {
@@ -353,7 +347,7 @@ describe('Twenty CRM Schema Object node', () => {
 		expect(companyAdditional.fields).toEqual([]);
 
 		getObject.mockClear();
-		genericParameter.mockImplementation((name: string) =>
+		genericParameter.mockImplementation((name: string): unknown =>
 			name === 'resource' ? 'record' : name === 'objectApiName' ? '' : undefined,
 		);
 		await expect(

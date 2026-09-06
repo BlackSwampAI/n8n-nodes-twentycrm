@@ -224,15 +224,15 @@ describe('Twenty metadata discovery', () => {
 
 	it('normalizes the v2.35 editable/creatable shape without guessing removed custom flags', () => {
 		const modernField = field({ isUIEditable: false });
-		delete modernField.isCustom;
-		delete modernField.isUIReadOnly;
+		delete (modernField as Record<string, unknown>).isCustom;
+		delete (modernField as Record<string, unknown>).isUIReadOnly;
 		const modernObject = object({
 			isUIEditable: true,
 			isUICreatable: false,
 			fieldsList: [modernField],
 		});
-		delete modernObject.isCustom;
-		delete modernObject.isUIReadOnly;
+		delete (modernObject as Record<string, unknown>).isCustom;
+		delete (modernObject as Record<string, unknown>).isUIReadOnly;
 
 		expect(normalizeTwentyObject(modernObject)).toMatchObject({
 			isCustom: undefined,

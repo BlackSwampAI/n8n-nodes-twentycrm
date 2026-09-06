@@ -1,12 +1,10 @@
 # Releasing `@blackswampai/n8n-nodes-twentycrm`
 
-This repository publishes only from `.github/workflows/publish.yml` after an explicitly authorized `v*.*.*` tag push. Do not run `npm publish` locally. For the already-versioned first release, do not run the interactive local `npm run release`; GitHub Actions runs it once as the publish action.
+This is an established npm package. Version 0.1.3 is published with provenance. Never publish locally: an authorized release must come from the tag-only `.github/workflows/publish.yml` through npm Trusted Publishing and GitHub provenance.
 
-PR 14 prepares and audits release infrastructure only. It does not authorize a tag, npm publication, GitHub release, Trusted Publisher change, token/secret creation, or Creator Portal submission.
+## Release gate
 
-## Release candidate gate
-
-Run on the exact candidate commit:
+Run on the exact release commit:
 
 ```sh
 npm ci
@@ -15,52 +13,26 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
-npm run release:check
+npm run scan:source
 npm run package:check
 npm run smoke:load
 npm run smoke:install
+npm run release:check
 git diff --check
 ```
 
-`smoke:install` packs the candidate, installs that tarball into an isolated temporary consumer without installing the host-provided `n8n-workflow` peer, and loads both nodes and credentials from the installed package. Complete the pinned live qualification and bounded n8n UI checklist separately when the release checklist requires them.
+Complete the guarded pinned Twenty qualification and bounded actual-n8n UI checklist separately when the release scope requires them. Inspect the dry-run tarball, confirm CI is green, confirm the intended npm version and tag do not exist, and obtain explicit owner authorization before tagging.
 
-## First-publication prerequisites
+## Trusted Publisher release
 
-Immediately before requesting tag authorization:
+npm Trusted Publishing is the normal authentication path for GitHub owner `BlackSwampAI`, repository `n8n-nodes-twentycrm`, and workflow `publish.yml`. No long-lived npm token belongs in repository secrets. The historical first-publication token bootstrap is not part of current releases and must not be recreated for routine publishing.
 
-1. Confirm the release commit is on `main`, CI is green, the worktree is clean, and package version is exactly `0.1.0`.
-2. Recheck that npm still returns E404 for the exact name `@blackswampai/n8n-nodes-twentycrm`; an unpublished name is not reserved.
-3. Confirm the maintainer can create a public package in the BlackSwampAI npm organization.
-4. Create a short-lived granular npm token with bypass 2FA and only the access required to create/publish this public package. Do not place it in a shell command, local npm configuration, repository file, issue, or log.
-5. Store the token only as the GitHub Actions secret `NPM_TOKEN`.
+The workflows install npm 11.19.0 before `npm ci`. `scripts/verify-npm-version.mjs` confirms Trusted Publishing support, and `scripts/prepare-npm-auth.mjs` removes only setup-node's empty token placeholder before the OIDC exchange.
 
-npm cannot configure a Trusted Publisher until the package exists. The bootstrap token is temporary; provenance still comes from the GitHub-hosted publish workflow.
+Only after explicit authorization, create and push an immutable annotated `v<package-version>` tag pointing to the approved `main` commit. The workflow verifies the exact tag/version, runs the complete gate, and performs the single irreversible `npm run release` action. Never move or reuse a published version or tag.
 
-## Authorized tag and Actions publication
+## Verification
 
-Only after explicit owner authorization, create and push an annotated `v0.1.0` tag pointing to the approved release commit. Tags are immutable release coordinates and must never be moved or reused.
+Before packaging, `npm run scan:source` applies official scanner 0.34.0 rules to source and separately to built JavaScript plus `package.json`. After publication, `npm run scan:published` checks registry metadata, provenance, attested public source, and the downloaded package. It retries only bounded recognized propagation failures and requires explicit success text; scanner exit status alone is insufficient.
 
-The tag starts `publish.yml`, which uses GitHub-hosted Ubuntu, Node 24, npm 11.5.1 or newer, frozen `npm ci`, the complete offline release gate, and least-privilege `contents: read` plus `id-token: write`. Its single irreversible publish action is `npm run release`; `@n8n/node-cli` performs its CI release and npm provenance publication. The temporary secret is mapped directly to `NODE_AUTH_TOKEN` and is never written by workflow shell commands.
-
-After Actions succeeds, verify the exact registry version, `latest` dist-tag, public access, package contents, and npm provenance/attestation. Do not infer success from a green workflow alone.
-
-## GitHub release
-
-Creating the matching GitHub release is a separate external mutation and requires separate owner authorization after registry/provenance verification.
-
-## Migrate to Trusted Publisher
-
-After `0.1.0` exists on npm, configure npm Trusted Publishing with:
-
-- Provider: GitHub Actions
-- Repository owner: `BlackSwampAI`
-- Repository name: `n8n-nodes-twentycrm`
-- Workflow filename: `publish.yml`
-- Environment: blank
-- Allowed action: `npm publish`
-
-Then delete the GitHub Actions secret `NPM_TOKEN` and revoke the temporary granular token. Later tag-triggered releases use OIDC with the same workflow and no npm secret.
-
-## Creator Portal
-
-n8n Creator Portal submission is not part of publication. Prepare and submit it only with separate owner authorization after npm publication and release verification.
+After the workflow completes, verify the exact npm version, `latest` dist-tag, public package contents, provenance attestation, immutable tag, GitHub release, and scanner result. Creator Portal submission is a separate external action requiring owner authorization.

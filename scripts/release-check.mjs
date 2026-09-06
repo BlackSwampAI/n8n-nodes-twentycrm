@@ -30,6 +30,32 @@ const readme = read('README.md');
 const changelog = read('CHANGELOG.md');
 const webhookCredentialSource = read('credentials/TwentyWebhookApi.credentials.ts');
 const nodeLoadSmoke = read('scripts/node-load-smoke.mjs');
+const sourceScannerSource = read('scripts/scan-source.mjs');
+const publishedScannerSource = read('scripts/scan-published.mjs');
+const templateMarkerPath = '.blackswamp/template.json';
+let templateMarker;
+if (!existsSync(resolve(root, templateMarkerPath))) {
+	fail(`${templateMarkerPath} is required`);
+} else {
+	try {
+		templateMarker = JSON.parse(read(templateMarkerPath));
+	} catch {
+		fail(`${templateMarkerPath} must contain valid JSON`);
+	}
+}
+const finalDocumentation = ['docs/api-matrix.md', 'docs/testing.md', 'docs/branding.md'];
+const adoptedBaselineArtifacts = [
+	'.codex/config.toml',
+	'.codex/agents/builder.toml',
+	'.github/pull_request_template.md',
+	'docs/BATCH_HANDOFF_TEMPLATE.md',
+	'docs/TEMPLATE_MIGRATIONS.md',
+];
+const templateDocumentation = [
+	'docs/API_MATRIX_TEMPLATE.md',
+	'docs/TESTING_TEMPLATE.md',
+	'docs/BRANDING_TEMPLATE.md',
+];
 const officialIconHash = '0016254102d200b1598b4c1ecb88dfa398ec3a34db0616ed9441eda887ff2fef';
 
 if (!isValidN8nPackageName(packageJson.name ?? '')) {
@@ -41,12 +67,11 @@ if (!isValidN8nPackageName(packageJson.name ?? '')) {
 if (packageJson.name !== '@blackswampai/n8n-nodes-twentycrm') {
 	fail('package.json name must match the approved @blackswampai/n8n-nodes-twentycrm identity');
 }
-if (packageJson.version !== '0.1.3') {
-	fail('package.json version must be exactly 0.1.3 for this release candidate');
-}
-if (!/^## 0\.1\.3$/m.test(changelog)) {
-	fail('CHANGELOG.md must contain a real 0.1.3 release entry');
-}
+if (!/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(packageJson.version ?? ''))
+	fail('package.json version must be a plain semantic version');
+const escapedVersion = String(packageJson.version ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+if (!new RegExp(`^## ${escapedVersion}$`, 'm').test(changelog))
+	fail(`CHANGELOG.md must contain a release heading for ${packageJson.version}`);
 if (
 	packageLock.version !== packageJson.version ||
 	packageLock.packages?.['']?.version !== packageJson.version
@@ -103,6 +128,23 @@ if (
 if (packageJson.publishConfig?.access !== 'public') fail('publishConfig.access must be public');
 if (packageJson.engines?.node !== '>=22.22.0')
 	fail('engines.node must match the current >=22.22.0 baseline');
+if (packageJson.packageManager !== 'npm@11.19.0') fail('packageManager must pin npm@11.19.0');
+if (packageJson.devDependencies?.['@n8n/scan-community-package'] !== '0.34.0')
+	fail('official community-package scanner must remain pinned to 0.34.0');
+for (const script of ['scan:source', 'scan:published']) {
+	if (!packageJson.scripts?.[script]) fail(`package.json must define ${script}`);
+}
+if (
+	!sourceScannerSource.includes('SOURCE_FILE_PATTERNS') ||
+	!sourceScannerSource.includes("'dist/**/*.js'") ||
+	!sourceScannerSource.includes("'package.json'")
+) {
+	fail('scanner preflight must inspect official source patterns and built package artifacts');
+}
+if (!publishedScannerSource.includes('prepareNpmAuth(process.env)'))
+	fail('published scanner must prepare tokenless npm authentication');
+if (!publishedScannerSource.includes('has passed all security checks'))
+	fail('published scanner must require the official exact success text');
 if (packageJson.scripts?.release !== 'n8n-node release')
 	fail('release script must use n8n-node release');
 if (packageJson.scripts?.prepublishOnly !== 'n8n-node prerelease') {
@@ -122,6 +164,9 @@ if (!publishWorkflow.includes("- 'v*.*.*'"))
 	fail('publish workflow must trigger on v-prefixed version tags');
 if (!publishWorkflow.includes('runs-on: ubuntu-latest'))
 	fail('publish workflow must use a GitHub-hosted Ubuntu runner');
+if (!/timeout-minutes:\s*30/.test(publishWorkflow))
+	fail('publish workflow must have a 30-minute job timeout');
+if (!/timeout-minutes:\s*20/.test(ciWorkflow)) fail('CI must have a 20-minute job timeout');
 if (!/contents:\s*read/.test(publishWorkflow)) fail('publish workflow needs contents: read');
 if (!/id-token:\s*write/.test(publishWorkflow)) fail('publish workflow needs id-token: write');
 if (/contents:\s*write/.test(publishWorkflow))
@@ -142,11 +187,13 @@ const publishCommands = [
 	'npm run typecheck',
 	'npm test',
 	'npm run build',
+	'npm run scan:source',
 	'npm run release:check',
 	'npm run package:check',
 	'npm run smoke:load',
 	'npm run smoke:install',
 	'npm run release',
+	'npm run scan:published',
 ];
 const workflowRunCommands = [...publishWorkflow.matchAll(/^\s*(?:-\s*)?run:\s*(.+)$/gm)].map(
 	(match) => match[1].trim(),
@@ -160,11 +207,18 @@ for (const command of publishCommands) {
 if (workflowRunCommands.filter((command) => command === 'npm run release').length !== 1) {
 	fail('publish workflow must run npm run release exactly once');
 }
-if (!publishWorkflow.includes('NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}')) {
-	fail('publish workflow must map the bootstrap NPM_TOKEN secret directly to NODE_AUTH_TOKEN');
-}
-if (/npm config|_authToken|echo[^\n]*NPM_TOKEN|run:\s*\|/.test(publishWorkflow)) {
-	fail('publish workflow must not materialize the npm token through shell or npm configuration');
+if (publishWorkflow.includes('secrets.NPM_TOKEN'))
+	fail('established package publishing must use Trusted Publisher OIDC without NPM_TOKEN');
+if (!publishWorkflow.includes('node scripts/prepare-npm-auth.mjs'))
+	fail('publish workflow must remove setup-node token placeholders before OIDC publication');
+for (const [name, workflow] of [
+	['CI', ciWorkflow],
+	['publish', publishWorkflow],
+]) {
+	const npmPin = workflow.indexOf('npm install --global npm@11.19.0');
+	const frozenInstall = workflow.indexOf('npm ci');
+	if (npmPin < 0 || frozenInstall < 0 || npmPin > frozenInstall)
+		fail(`${name} workflow must install npm 11.19.0 before npm ci`);
 }
 
 const tagFailure = githubTagFailure(packageJson.version);
@@ -182,7 +236,7 @@ for (const heading of [
 if (hasPlaceholder(readme)) fail('README still contains a placeholder');
 for (const statement of [
 	'unofficial Black Swamp AI community integration',
-	'not affiliated with, sponsored by, or endorsed by Twenty.com, PBC',
+	'not affiliated with, sponsored by, endorsed by, or maintained by Twenty.com, PBC',
 	'1642be86f5c17217372366b9e2a950ebf88a53db',
 ]) {
 	if (!readme.includes(statement)) fail(`README is missing required notice: ${statement}`);
@@ -203,6 +257,39 @@ for (const statement of [
 }
 if (/under active development|has not been published|after publication/i.test(readme)) {
 	fail('README contains stale unpublished-package language');
+}
+if (
+	templateMarker !== undefined &&
+	(templateMarker?.schemaVersion !== 1 ||
+		templateMarker?.templateVersion !== '2.0.0' ||
+		templateMarker?.sourceRepository !==
+			'https://github.com/christopherjnelson/n8n-community-node-template')
+) {
+	fail(`${templateMarkerPath} must identify the adopted canonical Template v2 baseline`);
+}
+for (const path of adoptedBaselineArtifacts) {
+	if (!existsSync(resolve(root, path))) fail(`${path} is required`);
+}
+for (const path of finalDocumentation) {
+	if (!existsSync(resolve(root, path))) {
+		fail(`${path} is required`);
+		continue;
+	}
+	if (/<[A-Z][A-Z0-9_-]*(?: [A-Z0-9_-]+)*>/.test(read(path)))
+		fail(`${path} contains an unresolved uppercase template placeholder`);
+}
+for (const path of templateDocumentation) {
+	if (existsSync(resolve(root, path))) fail(`${path} must not remain in a generated repository`);
+}
+for (const [path, content] of [
+	['README.md', readme],
+	['RELEASING.md', releasing],
+	['docs/testing.md', read('docs/testing.md')],
+]) {
+	if (
+		/release candidate|has not been published|not yet published|unpublished package/i.test(content)
+	)
+		fail(`${path} contains stale pre-release wording`);
 }
 if (webhookCredentialSource.includes('credential-test-required')) {
 	fail('Twenty Webhook API credential must not suppress the credential-test-required rule');

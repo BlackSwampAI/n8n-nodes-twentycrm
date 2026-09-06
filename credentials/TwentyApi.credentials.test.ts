@@ -48,12 +48,13 @@ describe('Twenty API credentials', () => {
 		['missing data', {}, true],
 	])('applies the response failure sentinel to a %s', (_case, response, shouldFail) => {
 		const rule = new TwentyApi().test.rules?.[0];
-		const value = rule?.properties.key
+		const key = rule?.properties && 'key' in rule.properties ? rule.properties.key : '';
+		const value = key
 			.split('.')
 			.reduce<unknown>(
-				(current, key) =>
+				(current: unknown, segment: string) =>
 					current && typeof current === 'object'
-						? (current as Record<string, unknown>)[key]
+						? (current as Record<string, unknown>)[segment]
 						: undefined,
 				response,
 			);

@@ -218,7 +218,7 @@ describe('twentyApiRequest', () => {
 					extensions: { code: 'FORBIDDEN' },
 				},
 			],
-		});
+		} as never);
 
 		const error = await twentyApiRequest(mocked.context, {
 			method: 'POST',
@@ -239,7 +239,7 @@ describe('twentyApiRequest', () => {
 		const mocked = createContext();
 		mocked.httpRequestWithAuthentication.mockResolvedValue({
 			errors: [{ message: 'Cannot query field with private schema details', path: ['private'] }],
-		});
+		} as never);
 
 		const error = await twentyApiRequest(mocked.context, {
 			method: 'POST',
