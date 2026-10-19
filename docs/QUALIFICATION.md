@@ -2,6 +2,10 @@
 
 Automated package checks cannot prove n8n editor rendering. Run this bounded checklist in an owner-controlled disposable n8n instance after installing the locally packed package. Do not use production CRM data.
 
+## PR20 owner report
+
+The owner reported the requested eight-step PR20 n8n/CRM smoke checklist passed on 2026-10-19 at runtime commit `5189fb8`, then confirmed the compatibility work was verified. Exact n8n and Twenty versions are pending. This records hands-on smoke evidence for PR20; it does not assert that every item below was exercised, including the service-interruption step, conditional wide-object/cross-page cases, or high-volume webhook throttling and recovery.
+
 ## Package identity and credentials
 
 - Confirm **Twenty CRM** and **Twenty CRM Trigger** appear with the official Twenty icon in light and dark themes.
