@@ -173,6 +173,20 @@ describe('Twenty CRM Schema Object node', () => {
 		});
 		const inputMode = node.description.properties.find(({ name }) => name === 'inputMode');
 		expect(inputMode).toMatchObject({ type: 'options', default: 'fieldMapping' });
+		const readOptions = node.description.properties.find(({ name }) => name === 'readOptions');
+		expect(readOptions).toMatchObject({
+			type: 'collection',
+			displayOptions: {
+				show: {
+					resource: ['record', 'company', 'person', 'opportunity', 'task', 'note'],
+					operation: ['get'],
+				},
+			},
+			options: expect.arrayContaining([
+				expect.objectContaining({ name: 'fields', default: '' }),
+				expect.objectContaining({ name: 'depth', default: 0 }),
+			]),
+		});
 		const createFields = node.description.properties.find(({ name }) => name === 'createFields');
 		expect(createFields).toMatchObject({
 			type: 'resourceMapper',
@@ -234,6 +248,8 @@ describe('Twenty CRM Schema Object node', () => {
 			},
 			options: expect.arrayContaining([
 				expect.objectContaining({ name: 'filter' }),
+				expect.objectContaining({ name: 'fields', default: '' }),
+				expect.objectContaining({ name: 'depth', default: 0 }),
 				expect.objectContaining({ name: 'orderBy' }),
 			]),
 		});
@@ -403,7 +419,13 @@ describe('Twenty CRM Schema Object node', () => {
 		recordServiceMock.mockReturnValue({ get, getMany, create, update, delete: remove });
 		const result = await Twenty.prototype.execute.call(
 			executeContext([
-				{ resource: 'record', operation: 'get', objectApiName: 'vehicle', recordId: 'record-id' },
+				{
+					resource: 'record',
+					operation: 'get',
+					objectApiName: 'vehicle',
+					recordId: 'record-id',
+					readOptions: { fields: 'id,name', depth: 1 },
+				},
 				{
 					resource: 'record',
 					operation: 'getMany',
@@ -412,6 +434,7 @@ describe('Twenty CRM Schema Object node', () => {
 					limit: 25,
 					filter: 'status[eq]:"open"',
 					orderBy: 'createdAt[DescNullsLast]',
+					options: { fields: 'id,status', depth: 0 },
 				},
 				{
 					resource: 'record',
@@ -444,12 +467,14 @@ describe('Twenty CRM Schema Object node', () => {
 				},
 			]),
 		);
-		expect(get).toHaveBeenCalledWith('vehicle', 'record-id');
+		expect(get).toHaveBeenCalledWith('vehicle', 'record-id', { fields: 'id,name', depth: 1 });
 		expect(getMany).toHaveBeenCalledWith('widget', {
 			returnAll: false,
 			limit: 25,
 			filter: 'status[eq]:"open"',
 			orderBy: 'createdAt[DescNullsLast]',
+			fields: 'id,status',
+			depth: 0,
 		});
 		expect(create).toHaveBeenCalledWith('vehicle', '{}');
 		expect(update).toHaveBeenCalledWith('vehicle', 'update-id', { name: 'kept' });

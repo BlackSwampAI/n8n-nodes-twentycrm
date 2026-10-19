@@ -54,6 +54,27 @@ describe('Twenty record read service', () => {
 		});
 	});
 
+	it('serializes validated field selection and depth for Get without changing defaults', async () => {
+		requestMock
+			.mockResolvedValueOnce({ data: { vehicle: { id: 'default' } } })
+			.mockResolvedValueOnce({ data: { vehicle: { id: 'selected' } } });
+		const service = createRecordService(context, metadata());
+		await service.get('vehicle', 'default');
+		await service.get('vehicle', 'selected', {
+			fields: ' name, id, name,custom_field ',
+			depth: 1,
+		});
+		expect(requestMock.mock.calls.map(([, options]) => options)).toEqual([
+			{ method: 'GET', surface: 'coreRest', path: '/vehicles/default' },
+			{
+				method: 'GET',
+				surface: 'coreRest',
+				path: '/vehicles/selected',
+				query: { fields: 'name,id,custom_field', depth: 1 },
+			},
+		]);
+	});
+
 	it('routes every fixed Get Many resource without metadata discovery', async () => {
 		for (const [resource, plural] of [
 			['company', 'companies'],
@@ -116,6 +137,47 @@ describe('Twenty record read service', () => {
 				},
 			}),
 		);
+	});
+
+	it('keeps fields and depth on every Get Many page, including more than 200 requested fields', async () => {
+		const fields = Array.from({ length: 201 }, (_, index) => `field${index}`).join(',');
+		requestMock
+			.mockResolvedValueOnce(page([{ id: 'one' }], true, 'next'))
+			.mockResolvedValueOnce(page([{ id: 'two' }]));
+		await createRecordService(context, metadata()).getMany('vehicle', {
+			returnAll: true,
+			fields,
+			depth: 0,
+		});
+		expect(requestMock).toHaveBeenCalledTimes(2);
+		for (const [, options] of requestMock.mock.calls) {
+			expect(options.query).toMatchObject({ fields, depth: 0 });
+		}
+	});
+
+	it.each([
+		{ fields: ['id'] },
+		{ fields: 'id,,name' },
+		{ fields: 'company.name' },
+		{ fields: '*' },
+		{ fields: 'id,' },
+		{ depth: '1' },
+		{ depth: 2 },
+	])('rejects invalid read selection %# before requests', async (options) => {
+		await expect(
+			createRecordService(context, metadata()).get('vehicle', 'safe-id', options),
+		).rejects.toThrow(/Fields|Depth/);
+		expect(requestMock).not.toHaveBeenCalled();
+	});
+
+	it.each([undefined, '', '   '])('omits empty Fields value %#', async (fields) => {
+		requestMock.mockResolvedValue({ data: { vehicle: { id: 'safe-id' } } });
+		await createRecordService(context, metadata()).get('vehicle', 'safe-id', { fields });
+		expect(requestMock).toHaveBeenCalledWith(context, {
+			method: 'GET',
+			surface: 'coreRest',
+			path: '/vehicles/safe-id',
+		});
 	});
 
 	it('returns all pages and rejects repeated or missing cursors safely', async () => {
@@ -258,6 +320,137 @@ describe('Twenty record read service', () => {
 			{ method: 'DELETE', surface: 'coreRest', path: '/vehicles/record%20value' },
 		]);
 		expect(requestMock.mock.calls.every(([, options]) => !('retry' in options))).toBe(true);
+	});
+
+	it.each([
+		['workflow', 'v2.47.0'],
+		['workflowVersion', '2.49.0'],
+		['workflow', '3.0.0'],
+	] as const)(
+		'blocks all generic %s writes on Twenty %s with one cached version probe',
+		async (apiNameSingular, appVersion) => {
+			const workflow = object({
+				apiNameSingular,
+				apiNamePlural: `${apiNameSingular}s`,
+			});
+			requestMock.mockResolvedValue({ appVersion });
+			const service = createRecordService(context, metadata(workflow));
+			await expect(service.create(apiNameSingular, {})).rejects.toThrow('workflow editor');
+			await expect(service.update(apiNameSingular, 'id', {})).rejects.toThrow('workflow editor');
+			await expect(service.delete(apiNameSingular, 'id')).rejects.toThrow('workflow editor');
+			expect(requestMock).toHaveBeenCalledTimes(1);
+			expect(requestMock).toHaveBeenCalledWith(context, {
+				method: 'GET',
+				surface: 'root',
+				path: '/client-config',
+				retry: 'never',
+			});
+		},
+	);
+
+	it.each([
+		['older 2.46 stable', { appVersion: '2.46.9' }],
+		['older 2.35 stable', { appVersion: '2.35.0' }],
+		['older 2.9 stable', { appVersion: '2.9.0' }],
+		['missing', {}],
+		['malformed', { appVersion: 'current' }],
+		['prerelease', { appVersion: '2.47.0-beta.1' }],
+		['leading zero', { appVersion: '02.47.0' }],
+		['unsafe integer', { appVersion: '9007199254740992.0.0' }],
+		['non-string', { appVersion: 2.47 }],
+	])('preserves workflow writes for %s version responses', async (_label, versionResponse) => {
+		requestMock
+			.mockResolvedValueOnce(versionResponse)
+			.mockResolvedValueOnce({ data: { createWorkflow: { id: 'created' } } })
+			.mockResolvedValueOnce({ data: { updateWorkflow: { id: 'updated' } } })
+			.mockResolvedValueOnce({ data: { workflow: { id: 'deleted' } } });
+		const service = createRecordService(
+			context,
+			metadata(object({ apiNameSingular: 'workflow', apiNamePlural: 'workflows' })),
+		);
+		await expect(service.create('workflow', {})).resolves.toEqual({ id: 'created' });
+		await expect(service.update('workflow', 'id', {})).resolves.toEqual({ id: 'updated' });
+		await expect(service.delete('workflow', 'id')).resolves.toEqual({
+			success: true,
+			recordId: 'id',
+			objectApiName: 'workflow',
+		});
+		expect(requestMock).toHaveBeenCalledTimes(4);
+	});
+
+	it.each(['workflow', 'workflowVersion'])(
+		'never probes generic %s reads',
+		async (apiNameSingular) => {
+			const definition = object({
+				apiNameSingular,
+				apiNamePlural: `${apiNameSingular}s`,
+			});
+			requestMock
+				.mockResolvedValueOnce({ data: { [apiNameSingular]: { id: 'read' } } })
+				.mockResolvedValueOnce({
+					data: { [`${apiNameSingular}s`]: [] },
+					pageInfo: { hasNextPage: false, endCursor: null },
+				});
+			const service = createRecordService(context, metadata(definition));
+			await service.get(apiNameSingular, 'read');
+			await service.getMany(apiNameSingular, { returnAll: true });
+			expect(requestMock.mock.calls.every(([, options]) => options.surface === 'coreRest')).toBe(
+				true,
+			);
+		},
+	);
+
+	it('preserves workflowVersion metadata write restrictions before probing', async () => {
+		const service = createRecordService(
+			context,
+			metadata(
+				object({
+					apiNameSingular: 'workflowVersion',
+					apiNamePlural: 'workflowVersions',
+					isCreatable: false,
+				}),
+			),
+		);
+		await expect(service.create('workflowVersion', {})).rejects.toThrow('does not allow');
+		expect(requestMock).not.toHaveBeenCalled();
+	});
+
+	it('adds cautious guidance for 405 and preserves unrelated mutation failures', async () => {
+		const definition = object({ apiNameSingular: 'workflow', apiNamePlural: 'workflows' });
+		requestMock.mockResolvedValueOnce({}).mockRejectedValueOnce({ response: { status: 405 } });
+		await expect(
+			createRecordService(context, metadata(definition)).create('workflow', {}),
+		).rejects.toThrow('permissions or by the Twenty 2.47');
+		requestMock.mockReset().mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('private'));
+		await expect(
+			createRecordService(context, metadata(definition)).create('workflow', {}),
+		).rejects.toThrow('workflow write failed');
+	});
+
+	it('preserves workflow writes when version detection fails and adds cautious 403 guidance', async () => {
+		requestMock
+			.mockRejectedValueOnce(new Error('version unavailable'))
+			.mockRejectedValueOnce({ statusCode: 403 });
+		await expect(
+			createRecordService(
+				context,
+				metadata(object({ apiNameSingular: 'workflow', apiNamePlural: 'workflows' })),
+			).delete('workflow', 'id'),
+		).rejects.toThrow('permissions or by the Twenty 2.47');
+		expect(requestMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('never probes reads or unrelated and fixed-resource writes', async () => {
+		requestMock
+			.mockResolvedValueOnce({ data: { vehicle: { id: 'read' } } })
+			.mockResolvedValueOnce({ data: { createVehicle: { id: 'created' } } })
+			.mockResolvedValueOnce({ data: { createCompany: { id: 'company' } } });
+		await createRecordService(context, metadata()).get('vehicle', 'read');
+		await createRecordService(context, metadata()).create('vehicle', {});
+		await createFixedRecordService(context, 'company').create('company', {});
+		expect(requestMock.mock.calls.every(([, options]) => options.surface === 'coreRest')).toBe(
+			true,
+		);
 	});
 
 	it.each(['create', 'update'] as const)(
