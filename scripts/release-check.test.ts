@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { githubTagFailure, supportsNpmTrustedPublishing } from './release-check-lib.mjs';
+import {
+	githubTagFailure,
+	hasImmediateReleaseTagGuard,
+	supportsNpmTrustedPublishing,
+} from './release-check-lib.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 
@@ -23,11 +27,11 @@ describe('release audit', () => {
 	});
 
 	it('accepts ordinary local context and the exact package-version tag', () => {
-		expect(githubTagFailure('0.1.4', {})).toBeUndefined();
+		expect(githubTagFailure('0.1.5', {})).toBeUndefined();
 		expect(
-			githubTagFailure('0.1.4', {
-				GITHUB_REF: 'refs/tags/v0.1.4',
-				GITHUB_REF_NAME: 'v0.1.4',
+			githubTagFailure('0.1.5', {
+				GITHUB_REF: 'refs/tags/v0.1.5',
+				GITHUB_REF_NAME: 'v0.1.5',
 				GITHUB_REF_TYPE: 'tag',
 			}),
 		).toBeUndefined();
@@ -35,16 +39,42 @@ describe('release audit', () => {
 
 	it('rejects a GitHub tag that does not exactly match the package version', () => {
 		expect(
-			githubTagFailure('0.1.4', {
+			githubTagFailure('0.1.5', {
 				GITHUB_REF: 'refs/tags/v0.1.2',
 				GITHUB_REF_NAME: 'v0.1.2',
 				GITHUB_REF_TYPE: 'tag',
 			}),
-		).toBe('GitHub tag must exactly match package version v0.1.4');
+		).toBe('GitHub tag must exactly match package version v0.1.5');
+	});
+
+	it('requires release tag verification immediately after a full-history checkout', () => {
+		const checkout = `      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+`;
+		const guard = `      - name: Verify release tag
+        run: node scripts/verify-release-tag.mjs
+`;
+		expect(hasImmediateReleaseTagGuard(`${checkout}\n${guard}`)).toBe(true);
+		expect(hasImmediateReleaseTagGuard(`${checkout}\n      - run: npm ci\n\n${guard}`)).toBe(false);
+		expect(
+			hasImmediateReleaseTagGuard(
+				`${checkout.replace('fetch-depth: 0', 'fetch-depth: 1')}\n${guard}`,
+			),
+		).toBe(false);
 	});
 
 	it('pins the complete OIDC gate and postpublication scanner around one publish action', () => {
 		const workflow = readFileSync(resolve(root, '.github/workflows/publish.yml'), 'utf8');
+		const checkout = workflow.indexOf('- uses: actions/checkout@v6');
+		const fullHistory = workflow.indexOf('fetch-depth: 0', checkout);
+		const releaseTagGuard = workflow.indexOf('run: node scripts/verify-release-tag.mjs', checkout);
+		const setupNode = workflow.indexOf('- name: Set up Node.js', checkout);
+		expect(checkout).toBeGreaterThanOrEqual(0);
+		expect(fullHistory).toBeGreaterThan(checkout);
+		expect(releaseTagGuard).toBeGreaterThan(fullHistory);
+		expect(setupNode).toBeGreaterThan(releaseTagGuard);
+		expect(hasImmediateReleaseTagGuard(workflow)).toBe(true);
 		expect(workflow).toContain('run: node scripts/verify-npm-version.mjs');
 		expect(workflow.indexOf('run: node scripts/verify-npm-version.mjs')).toBeLessThan(
 			workflow.indexOf('run: npm ci'),

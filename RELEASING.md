@@ -29,7 +29,7 @@ npm Trusted Publishing is the normal authentication path for GitHub owner `Black
 
 The workflows install npm 11.19.0 before `npm ci`. `scripts/verify-npm-version.mjs` confirms Trusted Publishing support, and `scripts/prepare-npm-auth.mjs` removes only setup-node's empty token placeholder before the OIDC exchange.
 
-Only after explicit authorization, create and push an immutable annotated `v<package-version>` tag pointing to the approved `main` commit. The workflow verifies the exact tag/version, runs the complete gate, and performs the single irreversible `npm run release` action. Never move or reuse a published version or tag.
+Only after explicit authorization, create and push an immutable annotated `v<package-version>` tag pointing to the approved `main` commit. Before Node setup, dependency installation, authentication, or publication tooling, `scripts/verify-release-tag.mjs` requires the GitHub ref to exactly match the package version, verifies that the fetched ref is an annotated tag resolving to the checked-out `HEAD`, and confirms that its target is an ancestor of fetched `origin/main`. This is a fail-closed repository-history safeguard; it does not prove CI review or replace the real CI gate and explicit owner approval. The workflow then runs the complete gate and performs the single irreversible `npm run release` action. Never move or reuse a published version or tag.
 
 ## Verification
 

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import { isValidN8nPackageName } from './package-name.mjs';
-import { githubTagFailure } from './release-check-lib.mjs';
+import { githubTagFailure, hasImmediateReleaseTagGuard } from './release-check-lib.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const failures = [];
@@ -32,6 +32,13 @@ const webhookCredentialSource = read('credentials/TwentyWebhookApi.credentials.t
 const nodeLoadSmoke = read('scripts/node-load-smoke.mjs');
 const sourceScannerSource = read('scripts/scan-source.mjs');
 const publishedScannerSource = read('scripts/scan-published.mjs');
+const releaseTagVerifierPath = 'scripts/verify-release-tag.mjs';
+let releaseTagVerifierSource = '';
+if (!existsSync(resolve(root, releaseTagVerifierPath))) {
+	fail(`${releaseTagVerifierPath} is required`);
+} else {
+	releaseTagVerifierSource = read(releaseTagVerifierPath);
+}
 const templateMarkerPath = '.blackswamp/template.json';
 let templateMarker;
 if (!existsSync(resolve(root, templateMarkerPath))) {
@@ -162,6 +169,33 @@ if (!releasing.includes('npm run smoke:install')) {
 
 if (!publishWorkflow.includes("- 'v*.*.*'"))
 	fail('publish workflow must trigger on v-prefixed version tags');
+const checkoutIndex = publishWorkflow.indexOf('- uses: actions/checkout@v6');
+const fullHistoryIndex = publishWorkflow.indexOf('fetch-depth: 0', checkoutIndex);
+const releaseTagVerifierIndex = publishWorkflow.indexOf(
+	'run: node scripts/verify-release-tag.mjs',
+	checkoutIndex,
+);
+const setupNodeIndex = publishWorkflow.indexOf('- name: Set up Node.js', checkoutIndex);
+if (
+	checkoutIndex < 0 ||
+	fullHistoryIndex < checkoutIndex ||
+	releaseTagVerifierIndex < fullHistoryIndex ||
+	setupNodeIndex < releaseTagVerifierIndex
+) {
+	fail(
+		'publish workflow must fetch full history and verify the release tag immediately after checkout and before Node/npm setup',
+	);
+}
+if (!hasImmediateReleaseTagGuard(publishWorkflow)) {
+	fail('release tag verification must be the immediate step after full-history checkout');
+}
+if (
+	!releaseTagVerifierSource.includes('export function verifyReleaseTag') ||
+	!releaseTagVerifierSource.includes("['cat-file', '-t', expectedRef]") ||
+	!releaseTagVerifierSource.includes("['merge-base', '--is-ancestor'")
+) {
+	fail('release tag verifier must require an annotated tag in fetched origin/main history');
+}
 if (!publishWorkflow.includes('runs-on: ubuntu-latest'))
 	fail('publish workflow must use a GitHub-hosted Ubuntu runner');
 if (!/timeout-minutes:\s*30/.test(publishWorkflow))

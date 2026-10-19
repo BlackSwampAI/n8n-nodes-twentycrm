@@ -12,3 +12,9 @@ The adopted baseline and canonical source are recorded in `.blackswamp/template.
 - Added strict test TypeScript checking, machine-readable provenance, PR and batch-handoff guidance, and final API/testing/branding documentation.
 
 Future migrations must remain bounded and must not overwrite project-specific decisions or imply authorization for external actions.
+
+## Partial post-2.0 safeguard adoption
+
+- Adopted the canonical unversioned release-tag verifier from template commit `b5ab481ccfc25dcc546e4b12629f5c7bfdfb0e87` with full-history checkout and isolated fixture tests.
+- The guard requires an annotated package-version tag at `HEAD` whose target belongs to fetched `origin/main` history before release tooling runs. It does not claim CI review proof or replace owner authorization.
+- This focused safeguard does not adopt the full Template 2.2 migration and does not advance `.blackswamp/template.json` beyond the validated 2.0.0 baseline.

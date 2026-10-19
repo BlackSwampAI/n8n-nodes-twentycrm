@@ -17,6 +17,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify release tag
+        run: node scripts/verify-release-tag.mjs
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
