@@ -32,6 +32,7 @@ function createContext(baseUrl = 'https://api.twenty.com') {
 
 describe('twentyApiRequest', () => {
 	it.each<[TwentyApiSurface, string]>([
+		['root', 'https://twenty.example.com/crm/people'],
 		['coreRest', 'https://twenty.example.com/crm/rest/people'],
 		['coreGraphql', 'https://twenty.example.com/crm/graphql/people'],
 		['metadataRest', 'https://twenty.example.com/crm/rest/metadata/people'],

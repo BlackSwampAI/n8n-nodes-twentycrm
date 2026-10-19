@@ -1,12 +1,14 @@
 import type { IDataObject, IExecuteFunctions } from 'n8n-workflow';
-import { NodeOperationError } from 'n8n-workflow';
+import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 
 import type {
 	NormalizedObjectDefinition,
 	ObjectMetadataService,
+	RecordGetOptions,
 	RecordService,
 	TwentyRecord,
 } from './contracts';
+import { extractTwentyStatus } from './errors';
 import { createObjectMetadataService } from './metadata';
 import { twentyApiRequest } from './request';
 
@@ -167,6 +169,62 @@ function cleanQueryValue(value: string | undefined): string | undefined {
 	return trimmed ? trimmed : undefined;
 }
 
+function readQuery(
+	context: IExecuteFunctions,
+	options: RecordGetOptions = {},
+): IDataObject | undefined {
+	const query: IDataObject = {};
+	const { fields, depth } = options;
+	if (fields !== undefined && typeof fields !== 'string') {
+		throw new NodeOperationError(
+			context.getNode(),
+			'Fields must be a comma-separated string of root field API names.',
+		);
+	}
+	if (typeof fields === 'string' && fields.trim() !== '') {
+		const values = fields.split(',').map((value) => value.trim());
+		if (values.some((value) => value === '' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(value))) {
+			throw new NodeOperationError(
+				context.getNode(),
+				'Fields must contain only comma-separated root field API names. Dotted paths, wildcards, and empty entries are not supported.',
+			);
+		}
+		query.fields = [...new Set(values)].join(',');
+	}
+	if (depth !== undefined) {
+		if (typeof depth !== 'number' || !Number.isInteger(depth) || (depth !== 0 && depth !== 1)) {
+			throw new NodeOperationError(context.getNode(), 'Depth must be either 0 or 1.');
+		}
+		query.depth = depth;
+	}
+	return Object.keys(query).length > 0 ? query : undefined;
+}
+
+type TwentyVersion = { major: number; minor: number; patch: number } | 'unknown';
+
+function parseStableVersion(value: unknown): TwentyVersion {
+	if (typeof value !== 'string') return 'unknown';
+	const match = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value.trim());
+	if (!match) return 'unknown';
+	const components = match.slice(1).map(Number);
+	if (!components.every(Number.isSafeInteger)) return 'unknown';
+	return { major: components[0], minor: components[1], patch: components[2] };
+}
+
+function isAtLeast(version: TwentyVersion, major: number, minor: number): boolean {
+	return (
+		version !== 'unknown' &&
+		(version.major > major || (version.major === major && version.minor >= minor))
+	);
+}
+
+const WORKFLOW_WRITE_MESSAGE =
+	'Twenty 2.47 and newer reject generic REST writes to workflow and workflowVersion records. Use the Twenty workflow editor or a supported core workflow API outside this node.';
+
+function rethrowNodeApiError(error: NodeApiError): never {
+	throw error;
+}
+
 function normalizeRecordInput(value: unknown): IDataObject | undefined {
 	let parsed = value;
 	if (typeof value === 'string') {
@@ -183,6 +241,53 @@ export function createRecordService(
 	context: IExecuteFunctions,
 	metadata: ObjectMetadataService = createObjectMetadataService(context),
 ): RecordService {
+	let versionPromise: Promise<TwentyVersion> | undefined;
+	const getVersion = (): Promise<TwentyVersion> => {
+		versionPromise ??= twentyApiRequest(context, {
+			method: 'GET',
+			surface: 'root',
+			path: '/client-config',
+			retry: 'never',
+		})
+			.then((response) => parseStableVersion(record(response)?.appVersion))
+			.catch(() => 'unknown' as const);
+		return versionPromise;
+	};
+
+	async function guardWorkflowWrite(object: NormalizedObjectDefinition): Promise<TwentyVersion> {
+		if (!['workflow', 'workflowVersion'].includes(object.apiNameSingular)) {
+			return 'unknown';
+		}
+		const version = await getVersion();
+		if (isAtLeast(version, 2, 47)) {
+			throw new NodeOperationError(context.getNode(), WORKFLOW_WRITE_MESSAGE);
+		}
+		return version;
+	}
+
+	async function workflowMutation<T>(
+		object: NormalizedObjectDefinition,
+		version: TwentyVersion,
+		request: () => Promise<T>,
+	): Promise<T> {
+		if (!['workflow', 'workflowVersion'].includes(object.apiNameSingular)) return await request();
+		try {
+			return await request();
+		} catch (error) {
+			if (
+				['workflow', 'workflowVersion'].includes(object.apiNameSingular) &&
+				!isAtLeast(version, 2, 47) &&
+				[403, 405].includes(extractTwentyStatus(error) ?? 0)
+			) {
+				throw new NodeOperationError(
+					context.getNode(),
+					`Twenty rejected this workflow write with HTTP ${extractTwentyStatus(error)}. It may be blocked by permissions or by the Twenty 2.47 workflow REST restriction. ${WORKFLOW_WRITE_MESSAGE}`,
+				);
+			}
+			if (error instanceof NodeApiError) rethrowNodeApiError(error);
+			throw new NodeOperationError(context.getNode(), 'Twenty workflow write failed.');
+		}
+	}
 	async function objectFor(
 		apiName: string,
 		options: { requireWritable?: boolean; requireCreatable?: boolean } = {},
@@ -236,48 +341,60 @@ export function createRecordService(
 				requireWritable: true,
 				requireCreatable: true,
 			});
+			const version = await guardWorkflowWrite(object);
 			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}`;
-			const response = await twentyApiRequest(context, {
-				method: 'POST',
-				surface: 'coreRest',
-				path,
-				body,
-			});
+			const response = await workflowMutation(object, version, () =>
+				twentyApiRequest(context, {
+					method: 'POST',
+					surface: 'coreRest',
+					path,
+					body,
+				}),
+			);
 			return safeResponse(() => parseMutation(response, 'create', object.apiNameSingular));
 		},
 		async update(objectApiName, recordId, input) {
 			const body = safeInput(input);
 			const object = await objectFor(objectApiName, { requireWritable: true });
+			const version = await guardWorkflowWrite(object);
 			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}/${safeResponse(() => safeSegment(recordId, 'record identifier'))}`;
-			const response = await twentyApiRequest(context, {
-				method: 'PATCH',
-				surface: 'coreRest',
-				path,
-				body,
-			});
+			const response = await workflowMutation(object, version, () =>
+				twentyApiRequest(context, {
+					method: 'PATCH',
+					surface: 'coreRest',
+					path,
+					body,
+				}),
+			);
 			return safeResponse(() => parseMutation(response, 'update', object.apiNameSingular));
 		},
 		async delete(objectApiName, recordId) {
 			const object = await objectFor(objectApiName, { requireWritable: true });
+			const version = await guardWorkflowWrite(object);
 			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}/${safeResponse(() => safeSegment(recordId, 'record identifier'))}`;
-			await twentyApiRequest(context, {
-				method: 'DELETE',
-				surface: 'coreRest',
-				path,
-			});
+			await workflowMutation(object, version, () =>
+				twentyApiRequest(context, {
+					method: 'DELETE',
+					surface: 'coreRest',
+					path,
+				}),
+			);
 			return { success: true, recordId, objectApiName: object.apiNameSingular };
 		},
-		async get(objectApiName, recordId) {
+		async get(objectApiName, recordId, options) {
+			const query = readQuery(context, options);
 			const object = await objectFor(objectApiName);
 			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}/${safeResponse(() => safeSegment(recordId, 'record identifier'))}`;
 			const response = await twentyApiRequest(context, {
 				method: 'GET',
 				surface: 'coreRest',
 				path,
+				...(query ? { query } : {}),
 			});
 			return safeResponse(() => parseSingle(response, object.apiNameSingular));
 		},
 		async getMany(objectApiName, options) {
+			const selectedQuery = readQuery(context, options);
 			const object = await objectFor(objectApiName);
 			const path = `/${safeResponse(() => safeSegment(object.apiNamePlural, 'object API name'))}`;
 			const requestedLimit = options.returnAll ? Number.POSITIVE_INFINITY : (options.limit ?? 50);
@@ -294,6 +411,7 @@ export function createRecordService(
 				const orderBy = cleanQueryValue(options.orderBy);
 				if (filter) query.filter = filter;
 				if (orderBy) query.order_by = orderBy;
+				if (selectedQuery) Object.assign(query, selectedQuery);
 				if (cursor) query.starting_after = cursor;
 				const response = await twentyApiRequest(context, {
 					method: 'GET',

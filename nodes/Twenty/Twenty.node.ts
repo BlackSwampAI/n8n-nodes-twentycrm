@@ -325,6 +325,38 @@ export class Twenty implements INodeType {
 				},
 			},
 			{
+				displayName: 'Read Options',
+				name: 'readOptions',
+				type: 'collection',
+				placeholder: 'Add Option',
+				default: {},
+				displayOptions: {
+					show: { resource: ['record', ...FIXED_RESOURCE_VALUES], operation: ['get'] },
+				},
+				options: [
+					{
+						displayName: 'Depth',
+						name: 'depth',
+						type: 'options',
+						default: 0,
+						options: [
+							{ name: '0 - Root Fields Only', value: 0 },
+							{ name: '1 - Include Related Records', value: 1 },
+						],
+						description: 'Relation expansion depth accepted by Twenty REST (0 or 1)',
+					},
+					{
+						displayName: 'Fields',
+						name: 'fields',
+						type: 'string',
+						default: '',
+						placeholder: 'id,name,createdAt',
+						description:
+							'Comma-separated root field API names to request. Requires Twenty 2.46 or newer. The record ID is always included by Twenty.',
+					},
+				],
+			},
+			{
 				displayName: 'Limit',
 				name: 'limit',
 				type: 'number',
@@ -367,6 +399,26 @@ export class Twenty implements INodeType {
 					show: { resource: ['record', ...FIXED_RESOURCE_VALUES], operation: ['getMany'] },
 				},
 				options: [
+					{
+						displayName: 'Depth',
+						name: 'depth',
+						type: 'options',
+						default: 0,
+						options: [
+							{ name: '0 - Root Fields Only', value: 0 },
+							{ name: '1 - Include Related Records', value: 1 },
+						],
+						description: 'Relation expansion depth accepted by Twenty REST (0 or 1)',
+					},
+					{
+						displayName: 'Fields',
+						name: 'fields',
+						type: 'string',
+						default: '',
+						placeholder: 'id,name,createdAt',
+						description:
+							'Comma-separated root field API names to request. Requires Twenty 2.46 or newer. The record ID is always included by Twenty.',
+					},
 					{
 						displayName: 'Filter',
 						name: 'filter',
@@ -566,8 +618,22 @@ export class Twenty implements INodeType {
 						});
 						continue;
 					}
+					const readOptions = this.getNodeParameter('readOptions', itemIndex, {}) as Record<
+						string,
+						unknown
+					>;
+					const hasReadOptions =
+						Object.prototype.hasOwnProperty.call(readOptions, 'fields') ||
+						Object.prototype.hasOwnProperty.call(readOptions, 'depth');
 					output.push({
-						json: { ...(await recordService.get(objectApiName, recordId)) },
+						json: {
+							...(hasReadOptions
+								? await recordService.get(objectApiName, recordId, {
+										fields: readOptions.fields,
+										depth: readOptions.depth,
+									})
+								: await recordService.get(objectApiName, recordId)),
+						},
 						pairedItem: itemIndex,
 					});
 					continue;
@@ -585,6 +651,12 @@ export class Twenty implements INodeType {
 					orderBy: Object.prototype.hasOwnProperty.call(options, 'orderBy')
 						? (options.orderBy as string)
 						: legacyOrderBy,
+					...(Object.prototype.hasOwnProperty.call(options, 'fields')
+						? { fields: options.fields }
+						: {}),
+					...(Object.prototype.hasOwnProperty.call(options, 'depth')
+						? { depth: options.depth }
+						: {}),
 				});
 				output.push(...records.map((record) => ({ json: { ...record }, pairedItem: itemIndex })));
 				continue;

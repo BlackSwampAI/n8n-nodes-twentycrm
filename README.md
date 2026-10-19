@@ -55,9 +55,11 @@ The action node provides:
 - **Record:** the same generic CRUD surface for active standard and custom workspace objects.
 - **Schema Object:** read-only Get and Get Many metadata discovery.
 
-Create and Update default to metadata-driven Field Mapping. Fixed resources show common fields first and keep remaining writable/custom fields under Additional Fields. Generic Record retains full dynamic schema ordering. Known compound values are reconstructed for Twenty's REST API; JSON input remains available as an advanced fallback. Get Many supports bounded Limit/Return All cursor pagination and raw Twenty REST filter/order expressions.
+Create and Update default to metadata-driven Field Mapping. Fixed resources show common fields first and keep remaining writable/custom fields under Additional Fields. Generic Record retains full dynamic schema ordering. Known compound values are reconstructed for Twenty's REST API; JSON input remains available as an advanced fallback. Get and Get Many can request explicit comma-separated root Fields and REST relation Depth 0 or 1 on Twenty 2.46 and newer. Get Many supports bounded Limit/Return All cursor pagination and raw Twenty REST filter/order expressions. Wide objects should select only the fields each workflow needs; Twenty still applies field permissions, relation/query-complexity constraints, and request URL or proxy limits.
 
 All resources reuse shared authenticated transport, pagination, field mapping, and sanitized errors. Fixed-resource REST routing uses stable shared descriptors, so Get/Get Many and JSON-input CRUD do not depend on metadata discovery. Generic Record operations and every field-mapped write remain metadata-driven. Transient retries are conservative and idempotency-gated; record mutations are never automatically retried. Schema creation or modification is not exposed as a node operation.
+
+Twenty 2.47 and newer reject generic Record Create, Update, and Delete for workflow and workflowVersion objects. The node detects stable server versions for those writes and directs users to Twenty's workflow editor or a supported core workflow API. Workflow reads and unrelated objects remain available.
 
 The **Twenty CRM Trigger** receives Record Created, Record Updated, and Record Deleted events for one active standard/custom object or All Objects. Registration is manual:
 
@@ -66,6 +68,8 @@ The **Twenty CRM Trigger** receives Record Created, Record Updated, and Record D
 3. Enter a strong shared secret in Twenty and save the same value in `Twenty Webhook API`.
 
 The trigger verifies Twenty's HMAC-SHA256 signature over the exact raw request body and millisecond timestamp, requires delivery within a five-minute signed timestamp tolerance, and filters the all-events stream inside n8n. Automatic registration and unsigned mode are not supported.
+
+Twenty 2.46 limits webhook calls across the entire workspace to 60 per minute by default and drops excess events before delivery. Trigger retries cannot recover events Twenty never sent. High-volume workflows should filter subscriptions in Twenty where possible and add an independently scheduled reconciliation workflow; see [Troubleshooting](docs/TROUBLESHOOTING.md).
 
 ## Troubleshooting
 

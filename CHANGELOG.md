@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Guard generic Record writes to workflow objects on Twenty 2.47 and newer while preserving reads and older or unidentifiable server behavior.
+- Add optional root Fields and relation Depth selection to record Get and Get Many operations for Twenty 2.46 and newer.
+- Document Twenty 2.46's workspace-wide webhook delivery limit, dropped-event behavior, self-hosted controls, and reconciliation patterns.
+
 ## 0.1.4
 
 - Align verified-node installation guidance and compatibility documentation with the current package status.

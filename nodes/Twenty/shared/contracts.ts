@@ -1,6 +1,11 @@
 import type { IDataObject } from 'n8n-workflow';
 
-export type TwentyApiSurface = 'coreRest' | 'coreGraphql' | 'metadataRest' | 'metadataGraphql';
+export type TwentyApiSurface =
+	| 'root'
+	| 'coreRest'
+	| 'coreGraphql'
+	| 'metadataRest'
+	| 'metadataGraphql';
 
 export interface NormalizedObjectDefinition {
 	id: string;
@@ -73,6 +78,13 @@ export interface RecordGetManyOptions {
 	limit?: number;
 	filter?: string;
 	orderBy?: string;
+	fields?: unknown;
+	depth?: unknown;
+}
+
+export interface RecordGetOptions {
+	fields?: unknown;
+	depth?: unknown;
 }
 
 export interface RecordDeleteResult {
@@ -83,7 +95,7 @@ export interface RecordDeleteResult {
 
 export interface RecordService {
 	create(objectApiName: string, input: unknown): Promise<TwentyRecord>;
-	get(objectApiName: string, recordId: string): Promise<TwentyRecord>;
+	get(objectApiName: string, recordId: string, options?: RecordGetOptions): Promise<TwentyRecord>;
 	getMany(objectApiName: string, options: RecordGetManyOptions): Promise<TwentyRecord[]>;
 	update(objectApiName: string, recordId: string, input: unknown): Promise<TwentyRecord>;
 	delete(objectApiName: string, recordId: string): Promise<RecordDeleteResult>;
