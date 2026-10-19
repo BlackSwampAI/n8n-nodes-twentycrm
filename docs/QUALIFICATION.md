@@ -4,7 +4,7 @@ Automated package checks cannot prove n8n editor rendering. Run this bounded che
 
 ## PR20 owner report
 
-The owner reported the requested eight-step PR20 n8n/CRM smoke checklist passed on 2026-10-19 at runtime commit `5189fb8`, then confirmed the compatibility work was verified. Exact n8n and Twenty versions are pending. This records hands-on smoke evidence for PR20; it does not assert that every item below was exercised, including the service-interruption step, conditional wide-object/cross-page cases, or high-volume webhook throttling and recovery.
+The owner reported the requested eight-step PR20 n8n/CRM smoke checklist passed on 2026-10-19 at runtime commit `5189fb8`, then confirmed the compatibility work was verified. The tested installation was reported as `latest` pulled approximately two hours before that confirmation; exact n8n and Twenty versions remain unconfirmed, so no specific release or broad version matrix is inferred. This records hands-on smoke evidence for PR20; it does not assert that every item below was exercised, including the service-interruption step, conditional wide-object/cross-page cases, or high-volume webhook throttling and recovery.
 
 ## Package identity and credentials
 
